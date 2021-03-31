@@ -1,0 +1,25 @@
+name: brainnotation
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python==3.8
+  - flake8
+  - ipython
+  - matplotlib
+  - nibabel
+  - nilearn
+  - numba
+  - numpy
+  - pandas
+  - pip
+  - scikit-learn
+  - scipy
+  - seaborn
+  - tqdm
+  - pip:
+    - mayavi
+    - pysurfer
+    - nimare
+    - git+https://github.com/netneurolab/netneurotools.git
+
