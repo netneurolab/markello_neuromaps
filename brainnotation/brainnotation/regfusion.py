@@ -123,7 +123,7 @@ def get_files(subject, out_dir=None, profile='hcp', verbose=False):
     return out_dir
 
 
-def hcp_regfusion(subdir, res='32k'):
+def hcp_regfusion(subdir, res='32k', verbose=True):
     """
     Runs registration fusion pipeline on HCP subject `subdir`
 
@@ -135,6 +135,8 @@ def hcp_regfusion(subdir, res='32k'):
         Path to HCP subject directory
     res : {'32k', '164k'}, optional
         Resolution at which to project the data
+    verbose : bool, optional
+        Whether to print status messages. Default: False
 
     Returns
     -------
@@ -179,7 +181,9 @@ def hcp_regfusion(subdir, res='32k'):
             )
 
             # now generate the reg-fusion outputs
-            print(f'Generating {name}.{hemi} index image: {params["resamp"]}')
+            if verbose:
+                print(f'Generating {name}.{hemi} index image: '
+                      f'{params["resamp"]}')
             for cmd in (VOLTOSURF, NATMASK, SURFTOSURF, FSMASK):
                 run(cmd.format(**params))
             generated[name].append(params['resamp'])
@@ -189,7 +193,7 @@ def hcp_regfusion(subdir, res='32k'):
     return generated
 
 
-def fs_regfusion(subdir, res='fsaverage6', data_dir=None):
+def fs_regfusion(subdir, res='fsaverage6', verbose=False):
     """
     Runs registration fusion pipeline on HCP subject `subdir`
 
@@ -201,6 +205,8 @@ def fs_regfusion(subdir, res='fsaverage6', data_dir=None):
         Path to HCP subject directory
     res : {'fsaverage', 'fsaverage4', 'fsaverage5', 'fsaverage6'}, optional
         Resolution at which to project the data
+    verbose : bool, optional
+        Whether to print status messages. Default: False
 
     Returns
     -------
@@ -283,7 +289,9 @@ def fs_regfusion(subdir, res='fsaverage6', data_dir=None):
                 params[key] = gii
 
             # now generate the reg-fusion mapping (subject -> fsaverage)
-            print(f'Generating {name}.{hemi} index image: {params["resamp"]}')
+            if verbose:
+                print(f'Generating {name}.{hemi} index image: '
+                      f'{params["resamp"]}')
             for cmd in (VOLTOSURF, NATMASK, SURFTOSURF, FSMASK):
                 run(cmd.format(**params))
             generated[name].append(params['resamp'])
