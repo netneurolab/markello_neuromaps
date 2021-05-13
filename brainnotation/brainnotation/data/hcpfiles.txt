@@ -3,10 +3,12 @@ MNINonLinear/{sub}.L.atlasroi.164k_fs_LR.shape.gii
 MNINonLinear/{sub}.L.midthickness.164k_fs_LR.surf.gii
 MNINonLinear/{sub}.L.sphere.164k_fs_LR.surf.gii
 MNINonLinear/{sub}.L.midthickness_MSMAll.164k_fs_LR.surf.gii
+MNINonLinear/{sub}.L.sulc.164k_fs_LR.shape.gii
 MNINonLinear/{sub}.R.atlasroi.164k_fs_LR.shape.gii
 MNINonLinear/{sub}.R.midthickness.164k_fs_LR.surf.gii
 MNINonLinear/{sub}.R.sphere.164k_fs_LR.surf.gii
 MNINonLinear/{sub}.R.midthickness_MSMAll.164k_fs_LR.surf.gii
+MNINonLinear/{sub}.R.sulc.164k_fs_LR.shape.gii
 MNINonLinear/xfms/standard2acpc_dc.nii.gz
 MNINonLinear/fsaverage_LR32k/{sub}.L.atlasroi.32k_fs_LR.shape.gii
 MNINonLinear/fsaverage_LR32k/{sub}.L.midthickness.32k_fs_LR.surf.gii

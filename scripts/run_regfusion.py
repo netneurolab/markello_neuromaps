@@ -18,27 +18,41 @@ REGFUNCS = dict(
     freesurfer=fs_regfusion,
     hcp=hcp_regfusion
 )
+RESOLUTIONS = dict(
+    freesurfer=['fsaverage', 'fsaverage4', 'fsaverage5', 'fsaverage6'],
+    hcp=['32k', '164k']
+)
+MAPPING = dict(
+    fsaverage4='3k',
+    fsaverage5='10k',
+    fsaverage6='41k',
+    fsaverage='164k',
+)
 
 
-def _regfusion(subdir, method):
+def _regfusion(subdir, method, resolution):
     if method not in REGFUNCS:
         raise ValueError(f'Invalid regfusion method: {method}')
 
     subdir = Path(subdir)
     outdir = OUTDIR / subdir.name / 'regfusion' / method
     outdir.mkdir(exist_ok=True, parents=True)
+    res = MAPPING.get(resolution, resolution)
     expected = [
-        outdir / f'sub-{subdir.name}_hemi-{hemi}_desc-{key}_index.func.gii'
+        (outdir / f'sub-{subdir.name}_res-{res}_hemi-{hemi}_desc-{key}_index.'
+                  'func.gii')
         for hemi in ('lh', 'rh') for key in ('x', 'y', 'z')
     ]
 
     # run reg-fusion only if it hasn't been run before
     if any(not fn.exists() for fn in expected):
-        print(f'{time.ctime()}: Running {method} reg-fusion {subdir.name}')
-        out = REGFUNCS[method](subdir, verbose=False)
+        print(f'{time.ctime()}: Running {method} reg-fusion {subdir.name} '
+              f'for {resolution} resolution')
+        out = REGFUNCS[method](subdir, res=resolution, verbose=False)
         for key, imgs in out.items():
             for hemi, img in zip(('lh', 'rh'), imgs):
-                fn = f'sub-{subdir.name}_hemi-{hemi}_desc-{key}_index.func.gii'
+                fn = f'sub-{subdir.name}_res-{res}_hemi-{hemi}_desc-{key}_' \
+                     f'index.func.gii'
                 shutil.move(img, outdir / fn)
 
 
@@ -50,7 +64,8 @@ def main():
 
     pool, fusion = Parallel(n_jobs=6), delayed(_regfusion)
     for method in REGFUNCS:
-        pool(fusion(DATADIR / sub, method=method) for sub in subjects)
+        for resolution in RESOLUTIONS[method]:
+            pool(fusion(DATADIR / sub, method, resolution) for sub in subjects)
 
 
 if __name__ == "__main__":
