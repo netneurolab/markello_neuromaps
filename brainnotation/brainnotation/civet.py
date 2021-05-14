@@ -22,8 +22,12 @@ AFFREG = 'wb_command -surface-affine-regression {sphere} {trg} {affine}'
 AFFAPP = 'wb_command -surface-apply-affine {sphere} {affine} {sphererot}'
 SPHEREFIX = 'wb_command -surface-modify-sphere {sphererot} 100 {sphererot} ' \
             '-recenter'
-MSMSULC = '{msmpath} {opts}--verbose --inmesh={sphere} --refmesh={refmesh} ' \
-          '--indata={sulc} --refdata={refdata} --conf={conf} --out={outdir}'
+MSMROT = '{msmpath} --levels=2 --verbose --inmesh={sphere} --indata={sulc} ' \
+         '--refmesh={mesh164k} --refdata={data164k} --conf={rotconf} ' \
+         '--out={msmrotout}'
+MSMSUL = '{msmpath} --verbose --inmesh={sphererot} --indata={sulc} ' \
+         '--refmesh={refmesh} --refdata={refdata} --conf={sulconf} '\
+         '--out={msmsulout}'
 MSMCONF_ROT = resource_filename('brainnotation', 'data/MSMPreRotationConf')
 MSMCONF_SUL = resource_filename('brainnotation', 'data/MSMSulcStrainFinalConf')
 REFMESH = resource_filename('brainnotation', 'data/fsaverage.{hemi}_LR.'
@@ -104,9 +108,9 @@ def obj_to_gifti(obj, fn=None):
     img = _construct_gifti(*read_civet(Path(obj)))
     if fn is None:
         fn = obj
+    fn = Path(fn).resolve()
     if fn.name.endswith('.obj'):
         fn = fn.parent / fn.name.replace('.obj', '.surf.gii')
-    fn = Path(fn)
     nib.save(img, fn)
 
     return fn
@@ -209,17 +213,19 @@ def extract_rotation(affine):
     return out
 
 
-def register_subject(subjdir, affine=None, only_gen_affine=True):
+def register_subject(subdir, hcpdir, affine=None, only_gen_affine=True):
     """
-    Registers CIVET processed `subjdir` to fsLR spacae
+    Registers CIVET processed `subdir` to fsLR spacae
 
     Parameters
     ----------
-    subjdir : str or os.PathLike
+    subdir : str or os.PathLike
         Path to CIVET output subject directory
+    hcpdir : str or os.PathLike
+        Path to subject data from HCP
     affine : (2,) tuple-of-str or os.PathLike, optional
         Filepaths to affine (rotation) transform matrix to rotate data from
-        `subjdir` into appropriate output space. Tuple should be (left, right)
+        `subdir` into appropriate output space. Tuple should be (left, right)
         matrices. If not provided will be generated for the subject using MSM.
         Default: None
     only_gen_affine : bool, optional
@@ -235,65 +241,58 @@ def register_subject(subjdir, affine=None, only_gen_affine=True):
         instead of the surface meshes.ls
     """
 
-    subjdir = Path(subjdir).resolve()
-    prefix = subjdir.name
-    suffix = 'surface_rsl_{hemi}_81920.{suff}'
-    fmt = subjdir / 'surfaces' / f'{prefix}_{{surf}}_{suffix}'
+    subdir = Path(subdir).resolve()
+    prefix = subdir.name
+    fmt = f'{prefix}_{{surf}}_surface_rsl_{{hemi}}_81920.{{suff}}'
+
+    hcpdir = Path(hcpdir).resolve()
+    subid = hcpdir.name
+    hcpdir = hcpdir / 'MNINonLinear'
 
     # set up working directory
     tempdir = Path(tempfile.gettempdir()) / prefix
     tempdir.mkdir(exist_ok=True, parents=True)
 
+    spheres, sulcs = civet_sphere(subdir)
+
     generated = tuple()
     for n, hemi in enumerate(('left', 'right')):
-        white = Path(str(fmt).format(surf='white', hemi=hemi, suff='obj'))
-        white = obj_to_gifti(white, fn=tempdir / white.name)
-        hfmt = fmt.name.format(surf='{surf}', hemi=hemi, suff='surf.gii')
+        hemil = HEMI[hemi]
         params = dict(
-            tempdir=tempdir,
-            white=white,
-            smoothwm=tempdir / 'rh.smoothwm',
-            inflated=tempdir / 'rh.inflated',
-            sulcout=tempdir / 'rh.sulc',
-            sphere=tempdir / hfmt.format(surf='sphere'),
-            sulc=tempdir / fmt.name.format(surf='sulc', hemi=hemi,
-                                           suff='shape.gii'),
+            sphere=spheres[n],
+            sulc=sulcs[n],
             msmpath=Path(MSMPATH),
-            refmesh=Path(REFMESH.format(hemi=HEMI[hemi])),
-            refdata=Path(REFSULC.format(hemi=HEMI[hemi])),
-            outdir=tempdir / 'msmrot' / f'{HEMI[hemi]}.',
-            conf=Path(MSMCONF_ROT),
-            trg=tempdir / 'msmrot' / f'{HEMI[hemi]}.sphere.reg.surf.gii',
+            mesh164k=hcpdir / f'{subid}.{hemil}.sphere.164k_fs_LR.surf.gii',
+            data164k=hcpdir / f'{subid}.{hemil}.sulc.164k_fs_LR.shape.gii',
+            refmesh=Path(REFMESH.format(hemi=hemil)),
+            refdata=Path(REFSULC.format(hemi=hemil)),
+            msmrotout=tempdir / 'msmrot' / f'{hemil}.',
+            msmsulout=tempdir / 'msmsulc' / f'{hemil}.',
+            rotconf=Path(MSMCONF_ROT),
+            sulconf=Path(MSMCONF_SUL),
+            trg=tempdir / 'msmrot' / f'{hemil}.sphere.reg.surf.gii',
             affine=tempdir / f'{prefix}_{hemi}_affine.txt',
-            sphererot=tempdir / hfmt.format(surf='sphere_rot')
+            sphererot=tempdir / fmt.format(surf='sphere_rot', hemi=hemi,
+                                           suff='surf.gii')
         )
+        for key in ('msmrotout', 'msmsulout'):
+            params[key].parent.mkdir(exist_ok=True, parents=True)
 
-        params['outdir'].parent.mkdir(exist_ok=True, parents=True)
-        if not params['sphere'].exists() or not params['sulc'].exists():
-            # generate a spherical representation of the data
-            for func in (SMOOTH, INFLATE, SPHERE):
-                run(func.format(**params))
-            # fix the coordinate system on the generated sphere
-            fix_coordsys(params['sphere'])
-            # invert sulcal morphology to match HCP
-            fsmorph_to_gifti(params['sulcout'], params['sulc'], -1)
-            # get rid of intermediate files
-            for fn in ('smoothwm', 'inflated', 'sulcout'):
-                params[fn].unlink()
+        # run the pre-rotation MSM and generate the rotational affine matrix to
+        # align the subject sphere to the HCP group sphere
         if not params['affine'].exists():
-            # run the pre-rotation MSM and generate the rotational affine
-            # matrix to align the subject sphere to the HCP group sphere
-            for func in (MSMSULC, AFFREG):
-                run(func.format(**params, opts='--levels=2 '))
+            for func in (MSMROT, AFFREG):
+                run(func.format(**params))
             rotation = extract_rotation(params['affine'])
             np.savetxt(params['affine'], rotation, fmt='%.10f')
 
+        # if we only want to generate first-pass affines then abort here
         if only_gen_affine:
             generated += (params['affine'],)
             continue
 
         # if we provided a rotational affine matrix use that instead of what
-        # we generated!
+        # was previously generated
         if affine is not None:
             params['affine'] = affine[n]
 
@@ -303,16 +302,77 @@ def register_subject(subjdir, affine=None, only_gen_affine=True):
                 run(func.format(**params))
 
         # set up parameters for "final" MSM (rotated sphere -> HCP group)
-        params['sphere'] = params['sphererot']
-        params['conf'] = MSMCONF_SUL
-        params['outdir'] = tempdir / 'msmsulc' / f'{HEMI[hemi]}.'
-        params['outdir'].parent.mkdir(exist_ok=True, parents=True)
-        output = tempdir / hfmt.format(surf='sphere_final')
+        output = tempdir / fmt.format(surf='sphere_final', hemi=hemi,
+                                      suff='surf.gii')
         if not output.exists():
-            run(MSMSULC.format(**params, opts=''))
-            fn = params['outdir'].parent / f'{HEMI[hemi]}.sphere.reg.surf.gii'
+            run(MSMSUL.format(**params))
+            fn = str(params['msmsulout']) + 'sphere.reg.surf.gii'
             shutil.copy(fn, output)
 
         generated += (output,)
 
     return generated
+
+
+def civet_sphere(subdir, resampled=True):
+    """
+    Generates spherical surface mesh for CIVET-processed `subdir`
+
+    Parameters
+    ----------
+    subdir : str or os.PathLike
+        Path to CIVET output subject directory
+    resampled : bool, optional
+        Whether to generate spheres of resampled instead of native surfaces.
+        Default: True
+
+    Returns
+    -------
+    sphere : (2,) tuple-of-os.PathLike
+        Path to generated sphere surface meshes for (left, right) hemisphere
+    sulc : (2,) tuple-of-os.PathLike
+        Path to generated sulcal depth maps for (left, right) hemisphere
+    """
+
+    subdir = Path(subdir).resolve()
+    prefix = subdir.name
+    rsl = 'rsl_' if resampled else ''
+    suffix = '{hemi}_81920.{suff}'
+    fmt = subdir / 'surfaces' / f'{prefix}_{{surf}}_surface_{rsl}{suffix}'
+
+    # set up working directory
+    tempdir = Path(tempfile.gettempdir()) / (prefix + '_sphere')
+    tempdir.mkdir(exist_ok=True, parents=True)
+
+    sphere, sulc = tuple(), tuple()
+    for hemi in ('left', 'right'):
+        white = Path(str(fmt).format(surf='white', hemi=hemi, suff='obj'))
+        params = dict(
+            white=obj_to_gifti(white, fn=tempdir / white.name),
+            smoothwm=tempdir / 'rh.smoothwm',
+            inflated=tempdir / 'rh.inflated',
+            sulcout=tempdir / 'rh.sulc',
+            sphere=subdir / 'gifti' / fmt.name.format(surf='sphere', hemi=hemi,
+                                                      suff='surf.gii'),
+            sulc=subdir / 'gifti' / fmt.name.format(surf='sulc', hemi=hemi,
+                                                    suff='shape.gii')
+        )
+
+        # generate spherical representation of the CIVET data; we'll fix
+        # the coordinate system on the generated sphere + invert sulcal
+        # morphology (* -1) to match HCP format
+        if not params['sphere'].exists():
+            params['sphere'].parent.mkdir(exist_ok=True, parents=True)
+            for func in (SMOOTH, INFLATE, SPHERE):
+                run(func.format(**params))
+            fix_coordsys(params['sphere'])
+            fsmorph_to_gifti(params['sulcout'], params['sulc'], -1)
+            for fn in ('white', 'smoothwm', 'inflated', 'sulcout'):
+                params[fn].unlink()
+
+        sphere += (params['sphere'],)
+        sulc += (params['sulc'],)
+
+    shutil.rmtree(tempdir)
+
+    return sphere, sulc
