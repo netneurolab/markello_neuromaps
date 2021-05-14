@@ -10,17 +10,21 @@ import time
 from joblib import Parallel, delayed
 import numpy as np
 
-from brainnotation.regfusion import fs_regfusion, hcp_regfusion
+from brainnotation.regfusion import (fs_regfusion, hcp_regfusion,
+                                     civet_regfusion)
 
 DATADIR = Path('./data/raw/hcp').resolve()
+CIVDIR = Path('./data/raw/civet').resolve()
 OUTDIR = Path('./data/derivatives/hcp').resolve()
 REGFUNCS = dict(
     freesurfer=fs_regfusion,
-    hcp=hcp_regfusion
+    hcp=hcp_regfusion,
+    civet=civet_regfusion,
 )
 RESOLUTIONS = dict(
     freesurfer=['fsaverage', 'fsaverage4', 'fsaverage5', 'fsaverage6'],
-    hcp=['32k', '164k']
+    hcp=['32k', '164k'],
+    civet=['41k']
 )
 MAPPING = dict(
     fsaverage4='3k',
@@ -35,23 +39,27 @@ def _regfusion(subdir, method, resolution):
         raise ValueError(f'Invalid regfusion method: {method}')
 
     subdir = Path(subdir)
-    outdir = OUTDIR / subdir.name / 'regfusion' / method
+    subid = subdir.name
+    outdir = OUTDIR / subid / 'regfusion' / method
     outdir.mkdir(exist_ok=True, parents=True)
     res = MAPPING.get(resolution, resolution)
     expected = [
-        (outdir / f'sub-{subdir.name}_res-{res}_hemi-{hemi}_desc-{key}_index.'
+        (outdir / f'sub-{subid}_res-{res}_hemi-{hemi}_desc-{key}_index.'
                   'func.gii')
         for hemi in ('lh', 'rh') for key in ('x', 'y', 'z')
     ]
 
+    if method == 'civet':
+        subdir = CIVDIR / ('HCP_' + subid)
+
     # run reg-fusion only if it hasn't been run before
     if any(not fn.exists() for fn in expected):
-        print(f'{time.ctime()}: Running {method} reg-fusion {subdir.name} '
+        print(f'{time.ctime()}: Running {method} reg-fusion {subid} '
               f'for {resolution} resolution')
         out = REGFUNCS[method](subdir, res=resolution, verbose=False)
         for key, imgs in out.items():
             for hemi, img in zip(('lh', 'rh'), imgs):
-                fn = f'sub-{subdir.name}_res-{res}_hemi-{hemi}_desc-{key}_' \
+                fn = f'sub-{subid}_res-{res}_hemi-{hemi}_desc-{key}_' \
                      f'index.func.gii'
                 shutil.move(img, outdir / fn)
 

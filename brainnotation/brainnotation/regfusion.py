@@ -4,10 +4,10 @@ Contains code for generating registration-fusion mappings
 """
 
 from collections import defaultdict
-import os
 from pathlib import Path
 from pkg_resources import resource_filename
 import tempfile
+import shutil
 
 import boto3
 from botocore.exceptions import ClientError
@@ -16,6 +16,9 @@ import numpy as np
 
 from netneurotools.freesurfer import check_fs_subjid
 from netneurotools.utils import run
+
+from .civet import civet_sphere, obj_to_gifti
+from .utils import tmpname
 
 VOLTOSURF = 'wb_command -volume-to-surface-mapping {volume} {srcmid} ' \
             '{out} -ribbon-constrained {white} {pial} -interpolate TRILINEAR'
@@ -27,27 +30,26 @@ VOLRESAMP = 'wb_command -volume-resample {mni} {space} CUBIC {volume} ' \
             '-warp {warp} -fnirt {space}'
 GENMIDTHICK = 'wb_command -surface-average {mid} -surf {white} -surf {pial}'
 FSTOGII = 'mris_convert {fs} {gii}'
+CIVET_MEDIAL = resource_filename('brainnotation',
+                                 'data/icbm_medial_{hemi}.shape.gii')
 
 
-def tmpname(suffix, prefix=None):
-    """
-    Little helper function because :man_shrugging:
-
-    Parameters
-    ----------
-    suffix : str
-        Suffix of created filename
-
-    Returns
-    -------
-    fn : str
-        Temporary filename; user is responsible for deletion
-    """
-
-    fd, fn = tempfile.mkstemp(suffix=suffix, prefix=prefix)
-    os.close(fd)
-
-    return Path(fn)
+def minc2nii(img, fn=None):
+    mnc = nib.load(img)
+    nifti = nib.Nifti1Image(np.asarray(mnc.dataobj), mnc.affine)
+    # re-orient nifti image RAS
+    orig_ornt = nib.io_orientation(nifti.affine)
+    targ_ornt = nib.orientations.axcodes2ornt('RAS')
+    transform = nib.orientations.ornt_transform(orig_ornt, targ_ornt)
+    nifti = nifti.as_reoriented(transform)
+    # save file (if desired)
+    if fn is not None:
+        fn = Path(fn).resolve()
+        if fn.name.endswith('.mnc'):
+            fn = fn.parent / fn.name.replace('.mnc', '.nii.gz')
+        nib.save(nifti, fn)
+        return fn
+    return nifti
 
 
 def make_xyz(template):
@@ -303,7 +305,7 @@ def fs_regfusion(subdir, res='fsaverage6', verbose=False):
     return generated
 
 
-def civet_regfusion(subdir):
+def civet_regfusion(subdir, res='41k', verbose=True):
     """
     Runs registration fusion pipeline on HCP subject `subdir`
 
@@ -313,6 +315,10 @@ def civet_regfusion(subdir):
     ----------
     subdir : str or os.PathLike
         Path to HCP subject directory
+    res : {'41k'}, optional
+        Resolution at which to project the data
+    verbose : bool, optional
+        Whether to print status messages. Default: False
 
     Returns
     -------
@@ -321,7 +327,62 @@ def civet_regfusion(subdir):
         hemisphere projected index maps for registration fusion
     """
 
-    raise NotImplementedError
+    # path handling
+    subdir = Path(subdir).resolve()
+    subid = subdir.name
+    surfdir = subdir / 'surfaces'
+    giidir = subdir / 'gifti'
+    natobj = f'{subid}_{{surf}}_surface_{{hemi}}_81920.obj'
+    rslobj = f'{subid}_{{surf}}_surface_rsl_{{hemi}}_81920.obj'
+    mnc = subdir / 'final' / f'{subid}_t1_tal.mnc'
+
+    # we need spherical surfaces for this to work
+    for resampled in (True, False):
+        civet_sphere(subdir, resampled=resampled)
+
+    tempdir = Path(tempfile.gettempdir()) / (subid + '_regfusion')
+    tempdir.mkdir(exist_ok=True, parents=True)
+
+    # run the actual commands
+    generated = defaultdict(list)
+    nii = minc2nii(mnc, mnc)
+    for img, name in zip(make_xyz(nii), ('x', 'y', 'z')):
+        template = tmpname(suffix='.nii.gz', directory=tempdir)
+        nib.save(img, template)
+        for hemi in ('left', 'right'):
+            natgii = natobj.replace('.obj', '.surf.gii')
+            rslgii = rslobj.replace('.obj', '.surf.gii')
+            params = dict(
+                volume=template,
+                white=surfdir / natobj.format(surf='white', hemi=hemi),
+                pial=surfdir / natobj.format(surf='gray', hemi=hemi),
+                src=giidir / natgii.format(surf='sphere', hemi=hemi),
+                trg=giidir / rslgii.format(surf='sphere', hemi=hemi),
+                srcmid=surfdir / natobj.format(surf='mid', hemi=hemi),
+                trgmid=surfdir / rslobj.format(surf='mid', hemi=hemi),
+                natmask=Path(CIVET_MEDIAL.format(hemi=hemi)),
+                fsmask=Path(CIVET_MEDIAL.format(hemi=hemi)),
+                out=tmpname(suffix='.func.gii', directory=tempdir),
+                resamp=tmpname(prefix=f'{hemi}.', suffix=f'.{name}.func.gii',
+                               directory=tempdir)
+            )
+
+            # we need gifti images!
+            for key in ('white', 'pial', 'srcmid', 'trgmid'):
+                fn = tempdir / params[key].name
+                params[key] = obj_to_gifti(params[key], fn)
+
+            # now generate the reg-fusion outputs
+            if verbose:
+                print(f'Generating {name}.{hemi} index image: '
+                      f'{params["resamp"]}')
+            for cmd in (VOLTOSURF, NATMASK, SURFTOSURF, FSMASK):
+                run(cmd.format(**params))
+            generated[name].append(params['resamp'])
+
+    shutil.rmtree(tempdir)
+
+    return generated
 
 
 def group_regfusion(images):
