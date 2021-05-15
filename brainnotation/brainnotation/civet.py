@@ -314,7 +314,7 @@ def register_subject(subdir, hcpdir, affine=None, only_gen_affine=True):
     return generated
 
 
-def civet_sphere(subdir, resampled=True):
+def civet_sphere(subdir, resampled=True, verbose=True):
     """
     Generates spherical surface mesh for CIVET-processed `subdir`
 
@@ -325,6 +325,8 @@ def civet_sphere(subdir, resampled=True):
     resampled : bool, optional
         Whether to generate spheres of resampled instead of native surfaces.
         Default: True
+    verbose : bool, optional
+        Whether to print status messages. Default: True
 
     Returns
     -------
@@ -364,7 +366,7 @@ def civet_sphere(subdir, resampled=True):
         if not params['sphere'].exists():
             params['sphere'].parent.mkdir(exist_ok=True, parents=True)
             for func in (SMOOTH, INFLATE, SPHERE):
-                run(func.format(**params))
+                run(func.format(**params), quiet=not verbose)
             fix_coordsys(params['sphere'])
             fsmorph_to_gifti(params['sulcout'], params['sulc'], -1)
             for fn in ('white', 'smoothwm', 'inflated', 'sulcout'):

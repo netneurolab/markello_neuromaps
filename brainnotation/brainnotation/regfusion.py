@@ -338,7 +338,7 @@ def civet_regfusion(subdir, res='41k', verbose=True):
 
     # we need spherical surfaces for this to work
     for resampled in (True, False):
-        civet_sphere(subdir, resampled=resampled)
+        civet_sphere(subdir, resampled=resampled, verbose=verbose)
 
     tempdir = Path(tempfile.gettempdir()) / (subid + '_regfusion')
     tempdir.mkdir(exist_ok=True, parents=True)
