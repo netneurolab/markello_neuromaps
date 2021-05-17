@@ -70,7 +70,7 @@ def main():
     missing = np.loadtxt(DATADIR / 'missing.txt', dtype=str)
     subjects = np.setdiff1d(subjects, missing)
 
-    pool, fusion = Parallel(n_jobs=6), delayed(_regfusion)
+    pool, fusion = Parallel(n_jobs=4), delayed(_regfusion)
     for method in REGFUNCS:
         for resolution in RESOLUTIONS[method]:
             pool(fusion(DATADIR / sub, method, resolution) for sub in subjects)

@@ -7,7 +7,6 @@ from collections import defaultdict
 from pathlib import Path
 from pkg_resources import resource_filename
 import tempfile
-import shutil
 
 import boto3
 from botocore.exceptions import ClientError
@@ -379,8 +378,10 @@ def civet_regfusion(subdir, res='41k', verbose=True):
             for cmd in (VOLTOSURF, NATMASK, SURFTOSURF, FSMASK):
                 run(cmd.format(**params))
             generated[name].append(params['resamp'])
+            for key in ('white', 'pial', 'srcmid', 'trgmid', 'out'):
+                params[key].unlink()
 
-    shutil.rmtree(tempdir)
+        template.unlink()
 
     return generated
 
