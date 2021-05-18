@@ -3,6 +3,7 @@
 Contains code for generating CIVET <-> fsLR mappings (hopefully)
 """
 
+import os
 from pathlib import Path
 from pkg_resources import resource_filename
 import shutil
@@ -13,6 +14,8 @@ import numpy as np
 
 from netneurotools.civet import read_civet
 from netneurotools.utils import run
+
+from .points import get_shared_triangles, which_triangle
 
 HEMI = dict(left='L', lh='L', L='L', right='R', rh='R', R='R')
 SMOOTH = 'mris_smooth -n 3 -nw {white} {smoothwm}'
@@ -37,7 +40,7 @@ REFSULC = resource_filename('brainnotation', 'data/{hemi}.refsulc.164k_fs_LR.'
 MSMPATH = resource_filename('brainnotation', 'data/msm')
 
 
-def _construct_gifti(vert, tri):
+def construct_surf_gii(vert, tri):
     """
     Constructs surface gifti image from `vert` and `tri`
 
@@ -62,6 +65,27 @@ def _construct_gifti(vert, tri):
     img = nib.GiftiImage(darrays=[vert, tri])
 
     return img
+
+
+def construct_shape_gii(data):
+    """
+    Constructs shape gifti image from `data`
+
+    Parameters
+    ----------
+    data : (N,) array_like
+        Input data
+
+    Returns
+    -------
+    img : nib.gifti.GiftiImage
+        Shape image
+    """
+
+    return nib.GiftiImage(darrays=[
+        nib.gifti.GiftiDataArray(data, intent='NIFTI_INTENT_SHAPE',
+                                 datatype='NIFTI_TYPE_FLOAT32')
+    ])
 
 
 def fix_coordsys(fn, val=3):
@@ -105,7 +129,7 @@ def obj_to_gifti(obj, fn=None):
         Path to saved image file
     """
 
-    img = _construct_gifti(*read_civet(Path(obj)))
+    img = construct_surf_gii(*read_civet(Path(obj)))
     if fn is None:
         fn = obj
     fn = Path(fn).resolve()
@@ -134,7 +158,7 @@ def fssurf_to_gifti(surf, fn=None):
         Path to saved image file
     """
 
-    img = _construct_gifti(*nib.freesurfer.read_geometry(Path(surf)))
+    img = construct_surf_gii(*nib.freesurfer.read_geometry(Path(surf)))
     if fn is None:
         fn = surf + '.surf.gii'
     fn = Path(fn)
@@ -166,16 +190,93 @@ def fsmorph_to_gifti(morph, fn=None, modifier=None):
     data = nib.freesurfer.read_morph_data(Path(morph))
     if modifier is not None:
         data *= float(modifier)
-    img = nib.GiftiImage(darrays=[
-        nib.gifti.GiftiDataArray(data, intent='NIFTI_INTENT_SHAPE',
-                                 datatype='NIFTI_TYPE_FLOAT32')
-    ])
+    img = construct_shape_gii(data)
     if fn is None:
         fn = morph + '.shape.gii'
     fn = Path(fn)
     nib.save(img, fn)
 
     return fn
+
+
+def read_surfmap(surfmap):
+    """
+    Reads surface map from CIVET
+
+    Parameters
+    ----------
+    surfmap : str or os.PathLike
+        Surface mapping file to be loaded
+
+    Returns
+    -------
+    control : (N,) array_like
+        Control vertex IDs
+    v0, v1 : (N,) array_like
+        Target vertex IDs
+    t : (N, 3) array_like
+        Resampling weights
+    """
+
+    control, v0, v1, t1, t2 = np.loadtxt(surfmap, skiprows=4).T
+    control = control.astype(int)
+    v0 = v0.astype(int)
+    v1 = v1.astype(int)
+    t0 = 1 - t1 - t2
+
+    return control, v0, v1, np.column_stack((t0, t1, t2))
+
+
+def resample_surface_map(source, morph, target, surfmap):
+    """
+    Resamples `morph` data defined on `source` surface to `target` surface
+
+    Uses `surfmap` to define mapping
+
+    Inputs
+    ------
+    source : str or os.PathLike
+        Path to surface file on which `morph` is defined
+    morph : str or os.PathLike
+        Path to morphology data defined on `source` surface
+    target : str or os.PathLike
+        Path to surface file on which to resample `morph` data
+    surfmap : str or os.PathLike
+        Path to surface mapping file defining transformation (CIVET style)
+
+    Returns
+    -------
+    resampled : np.ndarray
+        Provided `morph` data resampled to `target` surface
+    """
+
+    if isinstance(source, (str, os.PathLike)):
+        source = read_civet(source)
+    if isinstance(morph, (str, os.PathLike)):
+        morph = np.loadtxt(morph)
+    if len(morph) != len(source[0]):
+        raise ValueError('Provided `morph` file has different number of '
+                         'vertices from provided `source` surface')
+
+    if isinstance(target, (str, os.PathLike)):
+        target = read_civet(target)
+    if isinstance(surfmap, (str, os.PathLike)):
+        surfmap = read_surfmap(surfmap)
+    if len(surfmap[0]) != len(target[0]):
+        raise ValueError('Provided `target` surface has different number of '
+                         'vertices from provided `surfmap` transformation.')
+
+    source_tris = get_shared_triangles(source[1])
+    resampled = np.zeros_like(morph)
+    for (control, v0, v1, t) in zip(*surfmap):
+        tris = source_tris[(v0, v1) if v0 < v1 else (v1, v0)]
+        point, verts = target[0][control], source[0][tris]
+        idx = which_triangle(point, verts)
+        if idx is None:
+            idx = np.argmin(np.linalg.norm(point - verts[:, -1], axis=1))
+        resampled[control] = np.sum(morph[[v0, v1, tris[idx][-1]]] * t)
+
+    return resampled
 
 
 def extract_rotation(affine):
