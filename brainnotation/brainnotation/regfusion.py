@@ -16,7 +16,7 @@ import numpy as np
 from netneurotools.freesurfer import check_fs_subjid
 from netneurotools.utils import run
 
-from .civet import civet_sphere, obj_to_gifti
+from .civet import construct_shape_gii, obj_to_gifti, resample_surface_map
 from .utils import tmpname
 
 VOLTOSURF = 'wb_command -volume-to-surface-mapping {volume} {srcmid} ' \
@@ -330,14 +330,9 @@ def civet_regfusion(subdir, res='41k', verbose=True):
     subdir = Path(subdir).resolve()
     subid = subdir.name
     surfdir = subdir / 'surfaces'
-    giidir = subdir / 'gifti'
     natobj = f'{subid}_{{surf}}_surface_{{hemi}}_81920.obj'
     rslobj = f'{subid}_{{surf}}_surface_rsl_{{hemi}}_81920.obj'
     mnc = subdir / 'final' / f'{subid}_t1_tal.mnc'
-
-    # we need spherical surfaces for this to work
-    for resampled in (True, False):
-        civet_sphere(subdir, resampled=resampled, verbose=verbose)
 
     tempdir = Path(tempfile.gettempdir()) / (subid + '_regfusion')
     tempdir.mkdir(exist_ok=True, parents=True)
@@ -349,18 +344,15 @@ def civet_regfusion(subdir, res='41k', verbose=True):
         template = tmpname(suffix='.nii.gz', directory=tempdir)
         nib.save(img, template)
         for hemi in ('left', 'right'):
-            natgii = natobj.replace('.obj', '.surf.gii')
-            rslgii = rslobj.replace('.obj', '.surf.gii')
             params = dict(
                 volume=template,
                 white=surfdir / natobj.format(surf='white', hemi=hemi),
                 pial=surfdir / natobj.format(surf='gray', hemi=hemi),
-                src=giidir / natgii.format(surf='sphere', hemi=hemi),
-                trg=giidir / rslgii.format(surf='sphere', hemi=hemi),
                 srcmid=surfdir / natobj.format(surf='mid', hemi=hemi),
                 trgmid=surfdir / rslobj.format(surf='mid', hemi=hemi),
-                natmask=Path(CIVET_MEDIAL.format(hemi=hemi)),
                 fsmask=Path(CIVET_MEDIAL.format(hemi=hemi)),
+                surfmap=(subdir / 'transforms' / 'surfreg'
+                         / f'{subid}_{hemi}_surfmap.sm'),
                 out=tmpname(suffix='.func.gii', directory=tempdir),
                 resamp=tmpname(prefix=f'{hemi}.', suffix=f'.{name}.func.gii',
                                directory=tempdir)
@@ -375,8 +367,21 @@ def civet_regfusion(subdir, res='41k', verbose=True):
             if verbose:
                 print(f'Generating {name}.{hemi} index image: '
                       f'{params["resamp"]}')
-            for cmd in (VOLTOSURF, NATMASK, SURFTOSURF, FSMASK):
-                run(cmd.format(**params))
+
+            # project data to the surface
+            run(VOLTOSURF.format(**params))
+
+            # resample the data to the ICBM surface
+            source = nib.load(params['srcmid']).agg_data()
+            morph = nib.load(params['out']).agg_data()
+            target = nib.load(params['trgmid']).agg_data()
+            resamp = resample_surface_map(source, morph, target,
+                                          params['surfmap'])
+            nib.save(construct_shape_gii(resamp), params['resamp'])
+
+            # mask the resampled data
+            run(FSMASK.format(**params))
+
             generated[name].append(params['resamp'])
             for key in ('white', 'pial', 'srcmid', 'trgmid', 'out'):
                 params[key].unlink()
