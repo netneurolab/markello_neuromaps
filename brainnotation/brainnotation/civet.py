@@ -26,7 +26,7 @@ AFFAPP = 'wb_command -surface-apply-affine {sphere} {affine} {sphererot}'
 SPHEREFIX = 'wb_command -surface-modify-sphere {sphererot} 100 {sphererot} ' \
             '-recenter'
 MSMROT = '{msmpath} --levels=2 --verbose --inmesh={sphere} --indata={sulc} ' \
-         '--refmesh={mesh164k} --refdata={data164k} --conf={rotconf} ' \
+         '--refmesh={refmesh} --refdata={refdata} --conf={rotconf} ' \
          '--out={msmrotout}'
 MSMSUL = '{msmpath} --verbose --inmesh={sphererot} --indata={sulc} ' \
          '--refmesh={refmesh} --refdata={refdata} --conf={sulconf} '\
@@ -314,7 +314,7 @@ def extract_rotation(affine):
     return out
 
 
-def register_subject(subdir, hcpdir, affine=None, only_gen_affine=True):
+def register_subject(subdir, affine=None, only_gen_affine=True):
     """
     Registers CIVET processed `subdir` to fsLR spacae
 
@@ -322,8 +322,6 @@ def register_subject(subdir, hcpdir, affine=None, only_gen_affine=True):
     ----------
     subdir : str or os.PathLike
         Path to CIVET output subject directory
-    hcpdir : str or os.PathLike
-        Path to subject data from HCP
     affine : (2,) tuple-of-str or os.PathLike, optional
         Filepaths to affine (rotation) transform matrix to rotate data from
         `subdir` into appropriate output space. Tuple should be (left, right)
@@ -342,19 +340,20 @@ def register_subject(subdir, hcpdir, affine=None, only_gen_affine=True):
         instead of the surface meshes.ls
     """
 
+    if affine is not None:
+        if len(affine) != 2:
+            raise ValueError('If providing `affine` it must be len-2 tuple')
+
     subdir = Path(subdir).resolve()
     prefix = subdir.name
     fmt = f'{prefix}_{{surf}}_surface_rsl_{{hemi}}_81920.{{suff}}'
-
-    hcpdir = Path(hcpdir).resolve()
-    subid = hcpdir.name
-    hcpdir = hcpdir / 'MNINonLinear'
 
     # set up working directory
     tempdir = Path(tempfile.gettempdir()) / prefix
     tempdir.mkdir(exist_ok=True, parents=True)
 
-    spheres, sulcs = civet_sphere(subdir)
+    # we need the spherical meshes + sulcal depth maps for the subjects
+    spheres, sulcs = civet_sphere(subdir, resampled=True)
 
     generated = tuple()
     for n, hemi in enumerate(('left', 'right')):
@@ -363,8 +362,6 @@ def register_subject(subdir, hcpdir, affine=None, only_gen_affine=True):
             sphere=spheres[n],
             sulc=sulcs[n],
             msmpath=Path(MSMPATH),
-            mesh164k=hcpdir / f'{subid}.{hemil}.sphere.164k_fs_LR.surf.gii',
-            data164k=hcpdir / f'{subid}.{hemil}.sulc.164k_fs_LR.shape.gii',
             refmesh=Path(REFMESH.format(hemi=hemil)),
             refdata=Path(REFSULC.format(hemi=hemil)),
             msmrotout=tempdir / 'msmrot' / f'{hemil}.',
@@ -380,22 +377,20 @@ def register_subject(subdir, hcpdir, affine=None, only_gen_affine=True):
             params[key].parent.mkdir(exist_ok=True, parents=True)
 
         # run the pre-rotation MSM and generate the rotational affine matrix to
-        # align the subject sphere to the HCP group sphere
-        if not params['affine'].exists():
+        # align the subject sphere to the fsLR rotated sphere. if we provided a
+        # rotational affine matrix use that instead
+        if not params['affine'].exists() and affine is None:
             for func in (MSMROT, AFFREG):
                 run(func.format(**params))
             rotation = extract_rotation(params['affine'])
             np.savetxt(params['affine'], rotation, fmt='%.10f')
+        elif affine is not None:
+            params['affine'] = affine[n]
 
         # if we only want to generate first-pass affines then abort here
         if only_gen_affine:
             generated += (params['affine'],)
             continue
-
-        # if we provided a rotational affine matrix use that instead of what
-        # was previously generated
-        if affine is not None:
-            params['affine'] = affine[n]
 
         # apply rotation matrix to sphere surface
         if not params['sphererot'].exists():
@@ -452,9 +447,9 @@ def civet_sphere(subdir, resampled=True, verbose=True):
         white = Path(str(fmt).format(surf='white', hemi=hemi, suff='obj'))
         params = dict(
             white=obj_to_gifti(white, fn=tempdir / white.name),
-            smoothwm=tempdir / 'rh.smoothwm',
-            inflated=tempdir / 'rh.inflated',
-            sulcout=tempdir / 'rh.sulc',
+            smoothwm=tempdir / f'{hemi[0]}h.smoothwm',
+            inflated=tempdir / f'{hemi[0]}h.inflated',
+            sulcout=tempdir / f'{hemi[0]}h.sulc',
             sphere=subdir / 'gifti' / fmt.name.format(surf='sphere', hemi=hemi,
                                                       suff='surf.gii'),
             sulc=subdir / 'gifti' / fmt.name.format(surf='sulc', hemi=hemi,
