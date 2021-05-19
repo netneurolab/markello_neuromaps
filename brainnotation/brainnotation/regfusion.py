@@ -29,8 +29,9 @@ VOLRESAMP = 'wb_command -volume-resample {mni} {space} CUBIC {volume} ' \
             '-warp {warp} -fnirt {space}'
 GENMIDTHICK = 'wb_command -surface-average {mid} -surf {white} -surf {pial}'
 FSTOGII = 'mris_convert {fs} {gii}'
-CIVET_MEDIAL = resource_filename('brainnotation',
-                                 'data/icbm_medial_{hemi}.shape.gii')
+CIVET_MEDIAL = resource_filename(
+    'brainnotation', 'data/icbm_avg_medial_sym_mc_{hemi}.shape.gii'
+)
 
 
 def minc2nii(img, fn=None):
