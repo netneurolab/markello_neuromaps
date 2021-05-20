@@ -35,13 +35,33 @@ CIVET_MEDIAL = resource_filename(
 
 
 def minc2nii(img, fn=None):
+    """
+    Converts MINC `img` to NIfTI format (and re-orients to RAS)
+
+    Parameters
+    ----------
+    img : str or os.PathLike
+        Path to MINC file to be converted
+    fn : str or os.PathLike, optional
+        Filepath to where converted NIfTI image should be stored. If not
+        supplied the converted image is not saved to disk and is returned.
+        Default: None
+
+    Returns
+    -------
+    out : nib.Nifti1Image or os.PathLike
+        Converted image (if `fn` is None) or path to saved file on disk
+    """
+
     mnc = nib.load(img)
     nifti = nib.Nifti1Image(np.asarray(mnc.dataobj), mnc.affine)
+
     # re-orient nifti image RAS
     orig_ornt = nib.io_orientation(nifti.affine)
     targ_ornt = nib.orientations.axcodes2ornt('RAS')
     transform = nib.orientations.ornt_transform(orig_ornt, targ_ornt)
     nifti = nifti.as_reoriented(transform)
+
     # save file (if desired)
     if fn is not None:
         fn = Path(fn).resolve()
@@ -305,7 +325,7 @@ def fs_regfusion(subdir, res='fsaverage6', verbose=False):
     return generated
 
 
-def civet_regfusion(subdir, res='41k', verbose=True):
+def civet_regfusion(subdir, res='41k', verbose=False):
     """
     Runs registration fusion pipeline on HCP subject `subdir`
 
