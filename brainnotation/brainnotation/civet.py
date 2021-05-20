@@ -314,7 +314,7 @@ def extract_rotation(affine):
     return out
 
 
-def register_subject(subdir, affine=None, only_gen_affine=True):
+def register_subject(subdir, affine=None, only_gen_affine=True, verbose=False):
     """
     Registers CIVET processed `subdir` to fsLR spacae
 
@@ -331,13 +331,15 @@ def register_subject(subdir, affine=None, only_gen_affine=True):
         Whether to stop the registration procedure after the initial rotation
         affine matrix is generated. Useful if you want to e.g., average
         rotation matrices across subjects. Default: False
+    verbose : bool, optional
+        Whether to print status messages. Default: False
 
     Returns
     -------
     generated : (2,) tuple-of-os.PathLike
         Subject spheres (left, right hemispheres) aligned to fsLR space. If
         `only_gen_affine` is True then these are the affine rotation matrices
-        instead of the surface meshes.ls
+        instead of the surface meshes.
     """
 
     if affine is not None:
@@ -381,7 +383,7 @@ def register_subject(subdir, affine=None, only_gen_affine=True):
         # rotational affine matrix use that instead
         if not params['affine'].exists() and affine is None:
             for func in (MSMROT, AFFREG):
-                run(func.format(**params))
+                run(func.format(**params), quiet=not verbose)
             rotation = extract_rotation(params['affine'])
             np.savetxt(params['affine'], rotation, fmt='%.10f')
         elif affine is not None:
@@ -395,13 +397,13 @@ def register_subject(subdir, affine=None, only_gen_affine=True):
         # apply rotation matrix to sphere surface
         if not params['sphererot'].exists():
             for func in (AFFAPP, SPHEREFIX):
-                run(func.format(**params))
+                run(func.format(**params), quiet=not verbose)
 
         # set up parameters for "final" MSM (rotated sphere -> HCP group)
         output = tempdir / fmt.format(surf='sphere_final', hemi=hemi,
                                       suff='surf.gii')
         if not output.exists():
-            run(MSMSUL.format(**params))
+            run(MSMSUL.format(**params), quiet=not verbose)
             fn = str(params['msmsulout']) + 'sphere.reg.surf.gii'
             shutil.copy(fn, output)
 
