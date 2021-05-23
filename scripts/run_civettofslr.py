@@ -25,7 +25,7 @@ def _regsubj(subdir, affine=None):
     outdir = OUTDIR / subnum / 'surfreg' / 'civet_to_fslr'
     outdir.mkdir(exist_ok=True, parents=True)
     expected = [
-        (outdir / f'sub-{subnum}_res-41k_hemi-{hemi}_desc-civettofslr_sphere.'
+        (outdir / f'sub-{subnum}_den-41k_hemi-{hemi}_desc-civettofslr_sphere.'
                   'surf.gii')
         for hemi in ('lh', 'rh')
     ]

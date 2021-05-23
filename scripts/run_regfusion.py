@@ -44,7 +44,7 @@ def _regfusion(subdir, method, resolution):
     outdir.mkdir(exist_ok=True, parents=True)
     res = MAPPING.get(resolution, resolution)
     expected = [
-        (outdir / f'sub-{subid}_res-{res}_hemi-{hemi}_desc-{key}_index.'
+        (outdir / f'sub-{subid}_den-{res}_hemi-{hemi}_desc-{key}_index.'
                   'func.gii')
         for hemi in ('lh', 'rh') for key in ('x', 'y', 'z')
     ]
@@ -59,7 +59,7 @@ def _regfusion(subdir, method, resolution):
         out = REGFUNCS[method](subdir, res=resolution, verbose=False)
         for key, imgs in out.items():
             for hemi, img in zip(('lh', 'rh'), imgs):
-                fn = f'sub-{subid}_res-{res}_hemi-{hemi}_desc-{key}_' \
+                fn = f'sub-{subid}_den-{res}_hemi-{hemi}_desc-{key}_' \
                      f'index.func.gii'
                 shutil.move(img, outdir / fn)
 
