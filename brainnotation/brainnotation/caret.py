@@ -142,25 +142,30 @@ def apply_deform_map(source, deformation, method='nearest'):
 
     Parameters
     ----------
-    source : str
-        Filepath to file to be deformed
-    deformation : str
-        Filepath to deformation map
-    methods : {'nearest', 'average'}, optional
-        Method for applying `deformation` to `source`
+    source : str or os.PathLike
+        Path to (gifti) file, to be deformed
+    deformation : str or os.PathLike
+        Path to deformation map
+    methods : {'nearest'}, optional
+        Method for applying `deformation` to `source`. Currently only 'nearest'
+        is supported. Default: 'nearest'
 
     Returns
     -------
     projected : (N,) np.ndarray
-        Data from `source` projected to new surface specified in `deformation`
+        Data from `source` projected to surface specified in `deformation`
     """
-    methods = {'average', 'nearest'}
+
+    methods = {'nearest'}
     if method not in methods:
         raise ValueError(f'Invalid method {method}. Must be one of {methods}')
+
     nodes, bary = read_deform_map(deformation)
     data = nib.load(source).agg_data()
-    if method == 'average':
+
+    if method == 'average':  # FIXME: this is wrong.
         projected = np.sum(data[nodes] * bary, axis=1)
-    else:
+    elif method == 'nearest':
         projected = data[nodes[:, 0]]
+
     return projected
