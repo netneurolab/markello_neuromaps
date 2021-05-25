@@ -16,6 +16,7 @@ from brainnotation.regfusion import (fs_regfusion, hcp_regfusion,
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()
 OUTDIR = Path('./data/derivatives/hcp').resolve()
+N_PROC = 4
 REGFUNCS = dict(
     freesurfer=fs_regfusion,
     hcp=hcp_regfusion,
@@ -46,7 +47,7 @@ def _regfusion(subdir, method, resolution):
     expected = [
         (outdir / f'sub-{subid}_den-{res}_hemi-{hemi}_desc-{key}_index.'
                   'func.gii')
-        for hemi in ('lh', 'rh') for key in ('x', 'y', 'z')
+        for hemi in ('L', 'R') for key in ('x', 'y', 'z')
     ]
 
     if method == 'civet':
@@ -58,7 +59,7 @@ def _regfusion(subdir, method, resolution):
               f'for {resolution} resolution')
         out = REGFUNCS[method](subdir, res=resolution, verbose=False)
         for key, imgs in out.items():
-            for hemi, img in zip(('lh', 'rh'), imgs):
+            for hemi, img in zip(('L', 'R'), imgs):
                 fn = f'sub-{subid}_den-{res}_hemi-{hemi}_desc-{key}_' \
                      f'index.func.gii'
                 shutil.move(img, outdir / fn)
@@ -70,7 +71,7 @@ def main():
     missing = np.loadtxt(DATADIR / 'missing.txt', dtype=str)
     subjects = np.setdiff1d(subjects, missing)
 
-    pool, fusion = Parallel(n_jobs=4), delayed(_regfusion)
+    pool, fusion = Parallel(n_jobs=N_PROC), delayed(_regfusion)
     for method in REGFUNCS:
         for resolution in RESOLUTIONS[method]:
             pool(fusion(DATADIR / sub, method, resolution) for sub in subjects)

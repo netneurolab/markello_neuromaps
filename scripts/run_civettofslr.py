@@ -16,6 +16,7 @@ from brainnotation.civet import register_subject
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()
 OUTDIR = Path('./data/derivatives/hcp').resolve()
+N_PROC = 4
 
 
 def _regsubj(subdir, affine=None):
@@ -27,7 +28,7 @@ def _regsubj(subdir, affine=None):
     expected = [
         (outdir / f'sub-{subnum}_den-41k_hemi-{hemi}_desc-civettofslr_sphere.'
                   'surf.gii')
-        for hemi in ('lh', 'rh')
+        for hemi in ('L', 'R')
     ]
 
     if any(not fn.exists() for fn in expected):
@@ -46,21 +47,20 @@ def main():
     )
 
     # generate rotational affines first
-    affines = Parallel(n_jobs=4)(
+    affines = Parallel(n_jobs=N_PROC)(
         delayed(register_subject)(CIVDIR / sub, affine=None,
                                   only_gen_affine=True)
         for sub in subjects
     )
 
     # take average of affines and use to seed final alignment
-    final = ()
-    for affs, hemi in zip(zip(*affines), ('left', 'right')):
+    final = (CIVDIR / 'left_affine.txt', CIVDIR / 'right_affine.txt')
+    for n, affs in enumerate(zip(*affines)):
         rot = np.mean([np.loadtxt(aff) for aff in affs], axis=0)
-        final += (CIVDIR / f'{hemi}_affine.txt',)
-        np.savetxt(final[-1], rot, fmt='%.10f')
+        np.savetxt(final[n], rot, fmt='%.10f')
 
     # now generate the final aligned spherical surfaces
-    Parallel(n_jobs=4)(
+    Parallel(n_jobs=N_PROC)(
         delayed(_regsubj)(CIVDIR / sub, affine=final) for sub in subjects
     )
 
