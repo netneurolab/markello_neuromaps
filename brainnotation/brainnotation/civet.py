@@ -9,12 +9,12 @@ from pkg_resources import resource_filename
 import shutil
 import tempfile
 
-import nibabel as nib
 import numpy as np
 
 from netneurotools.civet import read_civet
 from netneurotools.utils import run
 
+from .images import (fix_coordsys, obj_to_gifti, fsmorph_to_gifti)
 from .points import get_shared_triangles, which_triangle
 
 HEMI = dict(left='L', lh='L', L='L', right='R', rh='R', R='R')
@@ -38,165 +38,6 @@ REFMESH = resource_filename('brainnotation', 'data/fsaverage.{hemi}_LR.'
 REFSULC = resource_filename('brainnotation', 'data/{hemi}.refsulc.164k_fs_LR.'
                             'shape.gii')
 MSMPATH = resource_filename('brainnotation', 'data/msm')
-
-
-def construct_surf_gii(vert, tri):
-    """
-    Constructs surface gifti image from `vert` and `tri`
-
-    Parameters
-    ----------
-    vert : (N, 3)
-        Vertices of surface mesh
-    tri : (T, 3)
-        Triangles comprising surface mesh
-
-    Returns
-    -------
-    img : nib.gifti.GiftiImage
-        Surface image
-    """
-
-    vert = nib.gifti.GiftiDataArray(vert, 'NIFTI_INTENT_POINTSET',
-                                    'NIFTI_TYPE_FLOAT32',
-                                    coordsys=nib.gifti.GiftiCoordSystem(3, 3))
-    tri = nib.gifti.GiftiDataArray(tri, 'NIFTI_INTENT_TRIANGLE',
-                                   'NIFTI_TYPE_INT32')
-    img = nib.GiftiImage(darrays=[vert, tri])
-
-    return img
-
-
-def construct_shape_gii(data):
-    """
-    Constructs shape gifti image from `data`
-
-    Parameters
-    ----------
-    data : (N,) array_like
-        Input data
-
-    Returns
-    -------
-    img : nib.gifti.GiftiImage
-        Shape image
-    """
-
-    return nib.GiftiImage(darrays=[
-        nib.gifti.GiftiDataArray(data, intent='NIFTI_INTENT_SHAPE',
-                                 datatype='NIFTI_TYPE_FLOAT32')
-    ])
-
-
-def fix_coordsys(fn, val=3):
-    """
-    Sets {xform,data}space of coordsys for GIFTI image `fn` to `val`
-
-    Parameters
-    ----------
-    fn : str or os.PathLike
-        Path to GIFTI image
-
-    Returns
-    -------
-    fn : os.PathLike
-        Path to GIFTI image
-    """
-
-    fn = Path(fn)
-    img = nib.load(fn)
-    for attr in ('dataspace', 'xformspace'):
-        setattr(img.darrays[0].coordsys, attr, val)
-    nib.save(img, fn)
-    return fn
-
-
-def obj_to_gifti(obj, fn=None):
-    """
-    Converts CIVET `obj` surface file to GIFTI format
-
-    Parameters
-    ----------
-    obj : str or os.PathLike
-        CIVET file to be converted
-    fn : str or os.PathLike, None
-        Output filename. If not supplied uses input `obj` filename (with
-        appropriate suffix). Default: None
-
-    Returns
-    -------
-    fn : os.PathLike
-        Path to saved image file
-    """
-
-    img = construct_surf_gii(*read_civet(Path(obj)))
-    if fn is None:
-        fn = obj
-    fn = Path(fn).resolve()
-    if fn.name.endswith('.obj'):
-        fn = fn.parent / fn.name.replace('.obj', '.surf.gii')
-    nib.save(img, fn)
-
-    return fn
-
-
-def fssurf_to_gifti(surf, fn=None):
-    """
-    Converts FreeSurfer `surf` surface file to GIFTI format
-
-    Parameters
-    ----------
-    obj : str or os.PathLike
-        FreeSurfer surface file to be converted
-    fn : str or os.PathLike, None
-        Output filename. If not supplied uses input `surf` filename (with
-        appropriate suffix). Default: None
-
-    Returns
-    -------
-    fn : os.PathLike
-        Path to saved image file
-    """
-
-    img = construct_surf_gii(*nib.freesurfer.read_geometry(Path(surf)))
-    if fn is None:
-        fn = surf + '.surf.gii'
-    fn = Path(fn)
-    nib.save(img, fn)
-
-    return fn
-
-
-def fsmorph_to_gifti(morph, fn=None, modifier=None):
-    """
-    Converts FreeSurfer `morph` data file to GIFTI format
-
-    Parameters
-    ----------
-    obj : str or os.PathLike
-        FreeSurfer morph file to be converted
-    fn : str or os.PathLike, None
-        Output filename. If not supplied uses input `morph` filename (with
-        appropriate suffix). Default: None
-    modifier : float, optional
-        Scalar factor to modify (multiply) the morphometric data. Default: None
-
-    Returns
-    -------
-    fn : os.PathLike
-        Path to saved image file
-    """
-
-    data = nib.freesurfer.read_morph_data(Path(morph))
-    if modifier is not None:
-        data *= float(modifier)
-    img = construct_shape_gii(data)
-    if fn is None:
-        fn = morph + '.shape.gii'
-    fn = Path(fn)
-    nib.save(img, fn)
-
-    return fn
 
 
 def read_surfmap(surfmap):
