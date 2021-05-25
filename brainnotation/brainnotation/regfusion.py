@@ -299,14 +299,14 @@ def fs_regfusion(subdir, res='fsaverage6', verbose=False):
             for key in ('natmask', 'fsmask'):
                 surf = params['src'] if key == 'natmask' else params['trg']
                 n_vert = len(nib.load(surf).agg_data('NIFTI_INTENT_POINTSET'))
-                mask = np.zeros(n_vert)
+                mask = np.zeros(n_vert, dtype='int32')
                 mask[nib.freesurfer.read_label(params[key])] = 1
                 gii = tmpname(prefix=f'{hemi}.',
-                              suffix=f'.{name}.{key}.shape.gii')
+                              suffix=f'.{name}.{key}.label.gii')
                 nib.save(nib.GiftiImage(darrays=[
                     nib.gifti.GiftiDataArray(mask,
-                                             intent='NIFTI_INTENT_NORMAL',
-                                             datatype='NIFTI_TYPE_FLOAT32')
+                                             intent='NIFTI_INTENT_LABEL',
+                                             datatype='NIFTI_TYPE_INT32')
                 ]), gii)
                 params[key] = gii
 
@@ -412,19 +412,27 @@ def civet_regfusion(subdir, res='41k', verbose=False):
     return generated
 
 
-def group_regfusion(images):
+def group_regfusion(x, y, z):
     """
     Generates group-level registration fusion mappings
 
     Parameters
     ----------
-    images : list of dict
-        Outputs from one of the _regfusion() functions for multiple subjects
+    x, y, z : list of images
+        List of reg-fusion output images to be averaged across subjects
 
     Returns
     -------
     mappings : np.ndarray
-        Registration fusion mappings from `images`
+        Registration fusion mapping coordinates
     """
 
-    raise NotImplementedError
+    out = ()
+    for imgs in (x, y, z):
+        sniff = np.zeros(nib.load(imgs[0]).agg_data().shape)
+        for img in imgs:
+            sniff += nib.load(img).agg_data()
+        sniff /= len(imgs)
+        out += (sniff,)
+
+    return np.column_stack(out)
