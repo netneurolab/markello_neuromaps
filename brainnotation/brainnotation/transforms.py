@@ -18,8 +18,8 @@ from netneurotools.utils import run
 METRICRESAMPLE = 'wb_command -metric-resample {metric} {src} {trg} ' \
                  'ADAP_BARY_AREA {out} -area-metrics {srcarea} {trgarea}'
 LABELRESAMPLE = 'wb_command -label-resample {label} {src} {trg} ' \
-                'ADAP_BARY_AREA {out} -area-merics {srcarea} {trgarea}'
-MASKSURF = 'wb_command -metric-mask {out} {mask} {out}'
+                'ADAP_BARY_AREA {out} -area-metrics {srcarea} {trgarea}'
+MASKSURF = 'wb_command -metric-mask {out} {trgmask} {out}'
 ATLASDIR = Path(resource_filename('brainnotation', 'data/atlases')).resolve()
 SURFFMT = 'tpl-{space}{trg}_den-{den}_hemi-{hemi}_sphere.surf.gii'
 VAFMT = 'tpl-{space}_den-{den}_hemi-{hemi}_desc-vaavg_midthickness.shape.gii'
@@ -101,9 +101,23 @@ def _vol_to_surf(img, den, space, method='linear'):
     return out
 
 
+def mni_to_civet(img, civet_density, method='linear'):
+    return _vol_to_surf(img, civet_density, 'civet', method)
+
+
+def mni_to_fsaverage(img, fsavg_density, method='linear'):
+    return _vol_to_surf(img, fsavg_density, 'fsaverage', method)
+
+
+def mni_to_fslr(img, fslr_density, method='linear'):
+    return _vol_to_surf(img, fslr_density, 'fsLR', method)
+
+
 def _check_hemi(data, hemi):
     """ Utility to check that `data` and `hemi` jive
     """
+    if isinstance(data, (str, os.PathLike)) or not hasattr(data, '__len__'):
+        data = (data,)
     if len(data) == 1 and hemi is None:
         raise ValueError('Must specify `hemi` when only 1 data file supplied')
     if hemi is not None and hemi not in ('L', 'R'):
@@ -158,65 +172,77 @@ def _surf_to_surf(data, srcparams, trgparams, method='linear', hemi=None):
             trg=ATLASDIR / trgparams['space'] / SURFFMT.format(**trgparams),
             srcarea=ATLASDIR / srcparams['space'] / VAFMT.format(**srcparams),
             trgarea=ATLASDIR / trgparams['space'] / VAFMT.format(**trgparams),
-            mask=ATLASDIR / trgparams['space'] / MLFMT.format(**trgparams)
+            srcmask=ATLASDIR / srcparams['space'] / MLFMT.format(**srcparams),
+            trgmask=ATLASDIR / trgparams['space'] / MLFMT.format(**trgparams)
         )
         for fn in (func, MASKSURF):
             run(fn.format(**params), quiet=True)
-        out += (load_gifti(params['out']),)
+        out += (construct_shape_gii(
+            np.nan_to_num(load_gifti(params['out']).agg_data())
+        ),)
         params['out'].unlink()
 
     return out
 
 
-def civet_to_fslr(data, civet_density, fslr_density='32k',
-                  hemi=None, method='linear'):
-    srcparams = dict(space='civet', den=civet_density, trg='_space-fsLR')
+def civet_to_fslr(data, density, fslr_density='32k', hemi=None,
+                  method='linear'):
+    srcparams = dict(space='civet', den=density, trg='_space-fsLR')
     trgparams = dict(space='fsLR', den=fslr_density, trg='')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
 
 
-def fslr_to_civet(data, fslr_density, civet_density='41k',
-                  hemi=None, method='linear'):
-    srcparams = dict(space='fsLR', den=fslr_density, trg='')
+def fslr_to_civet(data, density, civet_density='41k', hemi=None,
+                  method='linear'):
+    srcparams = dict(space='fsLR', den=density, trg='')
     trgparams = dict(space='civet', den=civet_density, trg='_space-fsLR')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
 
 
-def civet_to_fsaverage(data, civet_density, fsavg_density='41k',
-                       hemi=None, method='linear'):
-    srcparams = dict(space='civet', den=civet_density, trg='_space-fsaverage')
+def civet_to_fsaverage(data, density, fsavg_density='41k', hemi=None,
+                       method='linear'):
+    srcparams = dict(space='civet', den=density, trg='_space-fsaverage')
     trgparams = dict(space='fsaverage', den=fsavg_density, trg='')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
 
 
-def fsaverage_to_civet(data, fsavg_density, civet_density='41k',
-                       hemi=None, method='linear'):
-    srcparams = dict(space='fsaverage', den=fsavg_density, trg='')
+def fsaverage_to_civet(data, density, civet_density='41k', hemi=None,
+                       method='linear'):
+    srcparams = dict(space='fsaverage', den=density, trg='')
     trgparams = dict(space='civet', den=civet_density, trg='_space-fsaverage')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
 
 
-def fslr_to_fsaverage(data, fslr_density, fsavg_density='41k',
-                      hemi=None, method='linear'):
-    srcparams = dict(space='fsLR', den=fslr_density, trg='_space-fsaverage')
+def fslr_to_fsaverage(data, density, fsavg_density='41k', hemi=None,
+                      method='linear'):
+    srcparams = dict(space='fsLR', den=density, trg='_space-fsaverage')
     trgparams = dict(space='fsaverage', den=fsavg_density, trg='')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
 
 
-def fsaverage_to_fslr(data, fsavg_density, fslr_density='32k',
-                      hemi=None, method='linear'):
-    srcparams = dict(space='fsaverage', den=fsavg_density, trg='')
+def fsaverage_to_fslr(data, density, fslr_density='32k', hemi=None,
+                      method='linear'):
+    srcparams = dict(space='fsaverage', den=density, trg='')
     trgparams = dict(space='fsLR', den=fslr_density, trg='_space-fsaverage')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
 
 
-def mni_to_civet(img, civet_density, method='linear'):
-    return _vol_to_surf(img, civet_density, 'civet', method)
+def civet_to_civet(data, density, civet_density='41k', hemi=None,
+                   method='linear'):
+    srcparams = dict(space='civet', den=density, trg='')
+    trgparams = dict(space='civet', den=civet_density, trg='')
+    return _surf_to_surf(data, srcparams, trgparams, method, hemi)
 
 
-def mni_to_fsaverage(img, fsavg_density, method='linear'):
-    return _vol_to_surf(img, fsavg_density, 'fsaverage', method)
+def fslr_to_fslr(data, density, fslr_density='41k', hemi=None,
+                 method='linear'):
+    srcparams = dict(space='fsLR', den=density, trg='')
+    trgparams = dict(space='fsLR', den=fslr_density, trg='')
+    return _surf_to_surf(data, srcparams, trgparams, method, hemi)
 
 
-def mni_to_fslr(img, fslr_density, method='linear'):
-    return _vol_to_surf(img, fslr_density, 'fsLR', method)
+def fsaverage_to_fsaverage(data, density, fsavg_density='41k', hemi=None,
+                           method='linear'):
+    srcparams = dict(space='fsaverage', den=density, trg='')
+    trgparams = dict(space='fsaverage', den=fsavg_density, trg='')
+    return _surf_to_surf(data, srcparams, trgparams, method, hemi)
