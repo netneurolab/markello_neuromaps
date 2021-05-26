@@ -8,9 +8,11 @@ from pkg_resources import resource_filename
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa
-from nilearn import plotting
+import nibabel as nib
+from nilearn.plotting import plot_surf
+import numpy as np
 
-from brainnotation.transforms import DENSITIES
+from brainnotation.transforms import DENSITIES, _check_hemi
 
 CIVETDIR = Path('/home/rmarkello/data/civet')
 ATLASDIR = Path(resource_filename('brainnotation', 'data/atlases'))
@@ -18,6 +20,7 @@ REFMESH = resource_filename('brainnotation', 'data/fsaverage.{hemi}_LR.'
                             'spherical_std.164k_fs_LR.surf.gii')
 REFSULC = resource_filename('brainnotation', 'data/{hemi}.refsulc.164k_fs_LR.'
                             'shape.gii')
+HEMI = dict(L='left', R='right')
 
 
 def plot_fslr_sulc():
@@ -37,9 +40,9 @@ def plot_fslr_sulc():
 
     for ax, hemi in zip(axes, ('left', 'right')):
         hm = hemi[0].upper()
-        plotting.plot_surf(tmpdir / fmt.format(hemi=hm, desc=''),
-                           tmpdir / fmt.format(hemi=hm, desc='_desc-sulc'),
-                           hemi=hemi, axes=ax)
+        plot_surf(tmpdir / fmt.format(hemi=hm, desc=''),
+                  tmpdir / fmt.format(hemi=hm, desc='_desc-sulc'),
+                  hemi=hemi, axes=ax)
     fig.tight_layout()
 
     return fig
@@ -76,32 +79,32 @@ def plot_civet_msm(subjdir, rot=True):
                 sphere = (CIVETDIR / sub / 'gifti'
                           / f'{sub}_sphere_surface_rsl_{hemi}_81920.surf.gii')
             sulc = f'{sub}_sulc_surface_rsl_{hemi}_81920.shape.gii'
-            ax = plotting.plot_surf(
-                str(sphere),
-                str(CIVETDIR / sub / 'gifti' / sulc),
-                hemi=hemi, axes=ax
-            )
+            ax = plot_surf(str(sphere), str(CIVETDIR / sub / 'gifti' / sulc),
+                           hemi=hemi, axes=ax)
     fig.tight_layout()
 
     return fig
 
 
-def plot_to_template(data, space, density, surf='inflated', **kwargs):
+def plot_to_template(data, template, density, surf='inflated', space=None,
+                     hemi=None, **kwargs):
     """
-    Plots `data` on template `space`
+    Plots `data` on `template` surface
 
     Parameters
     ----------
     data : str or os.PathLike or tuple-of-str
         Path to data file(s) to be plotted. If tuple, assumes (left, right)
         hemisphere.
-    space : {'civet', 'fsaverage', 'fsLR'}
-        Space in which `data` is defined
+    template : {'civet', 'fsaverage', 'fsLR'}
+        Template on which `data` is defined
     density : str
         Resolution of template
     surf : str, optional
         Surface on which `data` should be plotted. Must be valid for specified
         `space`. Default: 'inflated'
+    space : str, optional
+        Space `template` is aligned to. Default: None
     kwargs : key-value pairs
         Passed directly to `nilearn.plotting.plot_surf`
 
@@ -111,21 +114,33 @@ def plot_to_template(data, space, density, surf='inflated', **kwargs):
         Plotted figure
     """
 
-    if space not in DENSITIES or space == 'MNI152':
+    if template not in DENSITIES or template == 'MNI152':
         raise ValueError('Invalid space argument')
-    if density not in DENSITIES[space]:
+    if density not in DENSITIES[template]:
         raise ValueError('Invalid density argument')
+    space = f'_space-{space}' if space is not None else ''
 
-    fmt = ATLASDIR / space \
-        / f'tpl-{space}_den-{density}_hemi-{{hemi}}_{surf}.surf.gii'
+    fmt = ATLASDIR / template \
+        / f'tpl-{template}{space}_den-{density}_hemi-{{hemi}}_{surf}.surf.gii'
+    bg_map = ATLASDIR / template \
+        / f'tpl-{template}_den-{density}_hemi-{{hemi}}_desc-sulc_' \
+        'midthickness.shape.gii'
 
-    n_surf = 1 if len(data) != 2 else 2
-    fig, axes = plt.subplots(1, n_surf, subplot_kw={'projection': '3d'})
+    data, hemi = zip(*_check_hemi(data, hemi))
+    n_surf = len(data)
+    fig, axes = plt.subplots(n_surf, 2, subplot_kw={'projection': '3d'})
     if n_surf == 1:
-        data, axes = (data,), (axes,)
-    for ax, hemi, img in zip(axes, ('left', 'right'), data):
-        template = str(fmt.parent / fmt.name.format(hemi=hemi[0].upper()))
-        plotting.plot_surf(template, str(img), hemi=hemi, axes=ax, **kwargs)
+        axes = (axes,)
+    for row, h, img in zip(axes, hemi, data):
+        if isinstance(img, nib.gifti.GiftiImage):
+            img = img.agg_data()
+        template = str(fmt.parent / fmt.name.format(hemi=h))
+        sulc = bg_map.parent / bg_map.name.format(hemi=h)
+        opts = dict(bg_map=str(sulc) if sulc.exists() else None,
+                    threshold=np.spacing(1))
+        opts.update(**kwargs)
+        for ax, view in zip(row, ['lateral', 'medial']):
+            plot_surf(template, img, hemi=HEMI[h], axes=ax, view=view, **opts)
     fig.tight_layout()
 
     return fig
