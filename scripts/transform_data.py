@@ -16,6 +16,8 @@ plt.rcParams['font.sans-serif'] = ['Myriad Pro']
 plt.rcParams['font.size'] = 20.0
 
 ATLASDIR = Path('./data/raw/brain_maps')
+FIGDIR = Path('./figures/transformed')
+OUTDIR = Path('./data/derivatives/correlations')
 MATCH = re.compile(r'_space-(\S+)_den-(\d+k)_hemi-(\S+)_')
 IMAGES = [
    ATLASDIR / 'fsLR' / '164k' / 'source-hill2010_desc-evoexp_space-fsLR_den-164k_hemi-R_feature.func.gii',  # noqa
@@ -29,10 +31,22 @@ IMAGES = [
    ATLASDIR / 'fsLR' / '4k' / 'source-hcps1200_desc-megalpha_space-fsLR_den-4k_hemi-L_feature.func.gii'  # noqa
 ]
 MAPPING = dict(
-    fsLR=transforms.fslr_to_fsaverage,
-    civet=transforms.civet_to_fsaverage,
-    fsaverage=transforms.fsaverage_to_fsaverage
+    fsLR=transforms.fslr_to_fslr,
+    civet=transforms.civet_to_fslr,
+    fsaverage=transforms.fsaverage_to_fslr
 )
+
+PARAMS = [
+    dict(cmap='caret_blueorange', vmin=-2.7, vmax=2.7),
+    dict(cmap='caret_blueorange', vmax=0.5),
+    dict(cmap='caret_blueorange', vmin=0.5, threshold=0.5),
+    dict(cmap='roy_big_bl', vmin=4500, vmax=7500, threshold=3000),
+    dict(cmap='videen_style', vmin=0.45, vmax=1.7, threshold=0.9),
+    dict(cmap='jet'),
+    dict(cmap='bwr', vmin=0.5, vmax=1.5),
+    dict(cmap='rocket', vmax=2),
+    dict(cmap='RdBu_r', vmin=0.15)
+]
 
 
 def imgcorr(src, trg):
@@ -53,7 +67,7 @@ def downsample_only(src, trg):
         if srcspace != trgspace or srcnum != trgnum:
             func = getattr(transforms,
                            f'{srcspace.lower()}_to_{trgspace.lower()}')
-            src, = func(src, srcden, trgden, hemi=trghemi)
+            src, = func(src, srcden, trgden, hemi=srchemi)
     # resample to `src`
     elif int(srcden[:-1]) < int(trgden[:-1]):
         func = getattr(transforms, f'{trgspace.lower()}_to_{srcspace.lower()}')
@@ -63,7 +77,7 @@ def downsample_only(src, trg):
 
 
 def transform_to_src(src, trg):
-    srcspace, srcden, srchemi = MATCH.search(str(src)).groups()
+    srcspace, srcden, _ = MATCH.search(str(src)).groups()
     trgspace, trgden, trghemi = MATCH.search(str(trg)).groups()
     func = getattr(transforms, f'{trgspace.lower()}_to_{srcspace.lower()}')
     trg, = func(trg, trgden, srcden, hemi=trghemi)
@@ -73,7 +87,7 @@ def transform_to_src(src, trg):
 
 def transform_to_trg(src, trg):
     srcspace, srcden, srchemi = MATCH.search(str(src)).groups()
-    trgspace, trgden, trghemi = MATCH.search(str(trg)).groups()
+    trgspace, trgden, _ = MATCH.search(str(trg)).groups()
     func = getattr(transforms, f'{srcspace.lower()}_to_{trgspace.lower()}')
     src, = func(src, srcden, trgden, hemi=srchemi)
 
@@ -101,19 +115,26 @@ def correlate_images(images, func):
     return corrs
 
 
-def implot(image):
+def implot(image, **kwargs):
     space, density, hemi = MATCH.search(str(image)).groups()
-    out = MAPPING[space](image, density, hemi=hemi)
-    fig = plotting.plot_to_template(out, 'fsaverage', '41k', hemi=hemi,
-                                    cmap='rocket')
-    fig.savefig(f'/home/rmarkello/Desktop/{str(image.name)[:-9]}.png',
+    if space != 'fsLR' or density != '32k':
+        out = MAPPING[space](image, density, hemi=hemi)
+    else:
+        out = image
+    fig = plotting.plot_to_template(out, 'fslr', '32k', hemi=hemi,
+                                    surf='veryinflated', **kwargs)
+    fig.savefig(FIGDIR / f'{str(image.name)[:-9]}.png',
                 dpi=300, transparent=True, bbox_inches='tight')
     plt.close(fig=fig)
 
 
 def main():
-    for image in IMAGES:
-        implot(image)
+    for fd in (FIGDIR, OUTDIR):
+        fd.mkdir(exist_ok=True, parents=True)
+
+    for n, image in enumerate(IMAGES):
+        print(image)
+        implot(image, **PARAMS[n])
 
     allcorrs = []
     funcs = [
@@ -122,7 +143,7 @@ def main():
     for func in funcs:
         print(func.__name__)
         corrs = correlate_images(IMAGES[2:], func)
-        np.savetxt(f'/home/rmarkello/Desktop/corrs_{func.__name__}.txt', corrs)
+        np.savetxt(OUTDIR / f'corrs_{func.__name__}.txt', corrs)
         allcorrs.append(corrs)
 
     allcorrs = np.column_stack(allcorrs)
@@ -135,7 +156,7 @@ def main():
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
     ax.set_ylabel(r'$r_{\mathrm{map1}, \mathrm{map2}}$')
     for suff in ('png', 'svg'):
-        ax.figure.savefig(f'/home/rmarkello/Desktop/corrs.{suff}',
+        ax.figure.savefig(FIGDIR / f'corrs.{suff}',
                           dpi=300, transparent=True, bbox_inches='tight')
 
 
