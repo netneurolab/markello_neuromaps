@@ -15,7 +15,6 @@ from netneurotools.utils import run
 
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()
-OUTDIR = Path('./data/derivatives/civet').resolve()
 ATLASDIR = Path('./data/raw/atlases/civet').resolve()
 MSMSULC = 'sub-{subnum}_den-{den}_hemi-{hemi}_desc-civettofslr_sphere.surf.gii'
 SPHEREPROJECT = 'wb_command -surface-sphere-project-unproject {spherein} ' \
@@ -23,7 +22,7 @@ SPHEREPROJECT = 'wb_command -surface-sphere-project-unproject {spherein} ' \
 SURFRESAMPLE = 'wb_command -surface-resample {surface} {src} {trg} ' \
                'BARYCENTRIC {out}'
 HEMI = dict(L='left', R='right')
-N_PROC = 4
+N_PROC = 1
 
 
 def make_hires_subject(subdir, verbose=True):
@@ -40,16 +39,16 @@ def make_hires_subject(subdir, verbose=True):
         tpl = ATLASDIR / f'tpl-civet_den-164k_hemi-{hemi}_sphere.surf.gii'
 
         # lo-res native sphere
-        proj = subdir / fmt.format(surf='sphere', res='81920')
+        proj = subdir / fmt.replace('.obj', '.surf.gii') \
+                           .format(surf='sphere', res='81920')
         # low-res native midthickness
-        fn = subdir.parent / 'surfaces' / fmt.format(sphere='mid', res='81920')
+        fn = subdir.parent / 'surfaces' / fmt.format(surf='mid', res='81920')
         midthick = subdir / fn.name.replace('.obj', '.surf.gii')
         if not midthick.exists():
             obj_to_gifti(fn, midthick)
         # hi-res native midthickness (to-be-generated)
         midout = subdir / midthick.name.replace('81920', '327684')
 
-        hemi = HEMI.get(hemi)
         # lo-res MSM sphere
         msm = (DATADIR / subnum / 'surfreg' / 'civet_to_fslr'
                / MSMSULC.format(subnum=subnum, den='41k', hemi=hemi))
@@ -75,7 +74,6 @@ def make_hires_subject(subdir, verbose=True):
 
 
 def main():
-    OUTDIR.mkdir(exist_ok=True, parents=True)
     subjects = np.loadtxt(DATADIR / 'subjects.txt', dtype=str)
     missing = np.loadtxt(DATADIR / 'missing.txt', dtype=str)
     subjects = np.core.defchararray.add(
