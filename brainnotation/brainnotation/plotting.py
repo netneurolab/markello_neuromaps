@@ -21,6 +21,9 @@ REFMESH = resource_filename('brainnotation', 'data/fsaverage.{hemi}_LR.'
 REFSULC = resource_filename('brainnotation', 'data/{hemi}.refsulc.164k_fs_LR.'
                             'shape.gii')
 HEMI = dict(L='left', R='right')
+ALIAS = dict(
+    fslr='fsLR', fsavg='fsaverage', mni152='MNI152', mni='MNI152'
+)
 
 
 def plot_fslr_sulc():
@@ -114,6 +117,7 @@ def plot_to_template(data, template, density, surf='inflated', space=None,
         Plotted figure
     """
 
+    template = ALIAS.get(template, template)
     if template not in DENSITIES or template == 'MNI152':
         raise ValueError('Invalid space argument')
     if density not in DENSITIES[template]:
