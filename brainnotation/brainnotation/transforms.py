@@ -236,7 +236,7 @@ def civet_to_civet(data, density, civet_density='41k', hemi=None,
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
 
 
-def fslr_to_fslr(data, density, fslr_density='41k', hemi=None,
+def fslr_to_fslr(data, density, fslr_density='32k', hemi=None,
                  method='linear'):
     srcparams = dict(space='fsLR', den=density, trg='')
     trgparams = dict(space='fsLR', den=fslr_density, trg='')
