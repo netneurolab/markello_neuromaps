@@ -41,7 +41,7 @@ def construct_surf_gii(vert, tri):
     return img
 
 
-def construct_shape_gii(data, names=None):
+def construct_shape_gii(data, names=None, intent='NIFTI_INTENT_SHAPE'):
     """
     Constructs shape gifti image from `data`
 
@@ -67,7 +67,7 @@ def construct_shape_gii(data, names=None):
         names = [{} for _ in range(data.shape[1])]
 
     return nib.GiftiImage(darrays=[
-        nib.gifti.GiftiDataArray(darr, intent='NIFTI_INTENT_SHAPE',
+        nib.gifti.GiftiDataArray(darr, intent=intent,
                                  datatype='NIFTI_TYPE_FLOAT32',
                                  meta=meta)
         for darr, meta in zip(data.T, names)
@@ -304,7 +304,7 @@ def average_surfaces(*surfs):
         if vertices is None:
             vertices = np.zeros_like(vert)
         if triangles is None:
-            triangles = img.agg_data('NIFTI_INTENT_TRIANGLES')
+            triangles = img.agg_data('NIFTI_INTENT_TRIANGLE')
         vertices += vert
 
     vertices /= n_surfs
