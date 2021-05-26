@@ -4,13 +4,15 @@ Functionality for plotting
 """
 
 from pathlib import Path
+from brainnotation.images import load_gifti
 from pkg_resources import resource_filename
 
+from matplotlib.cm import register_cmap
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa
-import nibabel as nib
 from nilearn.plotting import plot_surf
 import numpy as np
+import seaborn as sns
 
 from brainnotation.transforms import DENSITIES, _check_hemi
 
@@ -23,6 +25,11 @@ REFSULC = resource_filename('brainnotation', 'data/{hemi}.refsulc.164k_fs_LR.'
 HEMI = dict(L='left', R='right')
 ALIAS = dict(
     fslr='fsLR', fsavg='fsaverage', mni152='MNI152', mni='MNI152'
+)
+register_cmap('caret_blueorange', sns.blend_palette([
+        '#00d2ff', '#009eff', '#006cfe', '#0043fe',
+        '#fd4604', '#fe6b01', '#ffd100', '#ffff04'
+    ], as_cmap=True)
 )
 
 
@@ -90,7 +97,7 @@ def plot_civet_msm(subjdir, rot=True):
 
 
 def plot_to_template(data, template, density, surf='inflated', space=None,
-                     hemi=None, **kwargs):
+                     hemi=None, shading=0.6, **kwargs):
     """
     Plots `data` on `template` surface
 
@@ -126,9 +133,14 @@ def plot_to_template(data, template, density, surf='inflated', space=None,
 
     fmt = ATLASDIR / template \
         / f'tpl-{template}{space}_den-{density}_hemi-{{hemi}}_{surf}.surf.gii'
-    bg_map = ATLASDIR / template \
-        / f'tpl-{template}_den-{density}_hemi-{{hemi}}_desc-sulc_' \
-        'midthickness.shape.gii'
+    medial = ATLASDIR / template \
+        / f'tpl-{template}_den-{density}_hemi-{{hemi}}_desc-nomedialwall_' \
+        'dparc.label.gii'
+
+    opts = dict(threshold=np.spacing(1), alpha=1.0)
+    opts.update(**kwargs)
+    if opts.get('bg_map') is not None and kwargs.get('alpha') is None:
+        opts['alpha'] = 'auto'
 
     data, hemi = zip(*_check_hemi(data, hemi))
     n_surf = len(data)
@@ -136,15 +148,80 @@ def plot_to_template(data, template, density, surf='inflated', space=None,
     if n_surf == 1:
         axes = (axes,)
     for row, h, img in zip(axes, hemi, data):
-        if isinstance(img, nib.gifti.GiftiImage):
-            img = img.agg_data()
-        template = str(fmt.parent / fmt.name.format(hemi=h))
-        sulc = bg_map.parent / bg_map.name.format(hemi=h)
-        opts = dict(bg_map=str(sulc) if sulc.exists() else None,
-                    threshold=np.spacing(1))
-        opts.update(**kwargs)
+        img = load_gifti(img).agg_data()
+        med = load_gifti(str(medial).format(hemi=h)).agg_data()
+        geom = load_gifti(str(fmt).format(hemi=h)).agg_data()
+
         for ax, view in zip(row, ['lateral', 'medial']):
-            plot_surf(template, img, hemi=HEMI[h], axes=ax, view=view, **opts)
-    fig.tight_layout()
+            plot_surf(geom, img, hemi=HEMI[h], axes=ax, view=view, **opts)
+            ax.collections[0].set_facecolors(
+                _fix_facecolors(
+                    ax.collections[0]._original_facecolor, *geom, med, shading
+                )
+            )
+
+    if not opts.get('colorbar', False):
+        fig.tight_layout()
 
     return fig
+
+
+def _fix_facecolors(facecolors, vertices, faces, medial, shading=0.6):
+    """
+    Updates `facecolors` to reflect shading of mesh geometry + medial wall
+
+    Parameters
+    ----------
+    facecolors : (F,) array_like
+        Original facecolors of plot
+    vertices : (V, 3)
+        Vertices of surface mesh
+    faces : (F, 3)
+        Triangles of surface mesh
+    medial : (V,) array_like
+        Boolean array wherere 0 indicates the medial wall
+    shading : (0, 1), optional
+        Shading intensity (0 = no shading, 1 = dark). Default: 0.7
+
+    Returns
+    -------
+    fc : (F,) array_like
+        Updated facecolors with approriate shading + medial wall removed
+    """
+
+    fc = np.asarray(facecolors).copy()
+    fc[np.any(np.logical_not(medial)[faces], axis=1)] = plt.cm.gray_r(0.5)
+    fc[:, :-1] *= _shading_intensity(vertices, faces, shading=shading)[:, None]
+
+    return fc
+
+
+def _shading_intensity(vertices, faces, shading=0.7):
+    """
+    Generates intensity values to modify shading of triangle faces
+
+    Parameters
+    ----------
+    vertices : (V, 3)
+        Vertices of surface mesh
+    faces : (F, 3)
+        Triangles of surface mesh
+    shading : (0, 1), optional
+        Shading intensity (0 = no shading, 1 = dark). Default: 0.7
+
+    Returns
+    -------
+    intensity :
+    """
+
+    tris = vertices[faces]
+    norms = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    norms /= np.linalg.norm(norms, axis=1, keepdims=True)
+    intensity = norms @ np.array([0, 0, 1])
+    intensity[np.isnan(intensity)] = 1
+    min_int = np.min(intensity)
+    intensity = ((1 - shading)
+                 + (shading * (intensity - min_int)
+                    / ((np.percentile(intensity, 80) - min_int))))
+
+    return np.clip(intensity, None, 1)
