@@ -8,9 +8,11 @@ import re
 import time
 
 from joblib import Parallel, delayed
+import nibabel as nib
 import numpy as np
 
-from brainnotation.images import obj_to_gifti
+from brainnotation import images
+from brainnotation.civet import SPHEREFIX
 from netneurotools.utils import run
 
 DATADIR = Path('./data/raw/hcp').resolve()
@@ -22,7 +24,7 @@ SPHEREPROJECT = 'wb_command -surface-sphere-project-unproject {spherein} ' \
 SURFRESAMPLE = 'wb_command -surface-resample {surface} {src} {trg} ' \
                'BARYCENTRIC {out}'
 HEMI = dict(L='left', R='right')
-N_PROC = 1
+N_PROC = 6
 
 
 def make_hires_subject(subdir, verbose=True):
@@ -32,6 +34,7 @@ def make_hires_subject(subdir, verbose=True):
     subdir = subdir / 'gifti'
     print(f'{time.ctime()}: Generating hi-res CIVET mesh for {subnum}')
 
+    midthickness, sphere = (), ()
     for hemi in ('L', 'R'):
         fmt = f'{subid}_{{surf}}_surface_rsl_{HEMI[hemi]}_{{res}}.obj'
 
@@ -45,7 +48,7 @@ def make_hires_subject(subdir, verbose=True):
         fn = subdir.parent / 'surfaces' / fmt.format(surf='mid', res='81920')
         midthick = subdir / fn.name.replace('.obj', '.surf.gii')
         if not midthick.exists():
-            obj_to_gifti(fn, midthick)
+            images.obj_to_gifti(fn, midthick)
         # hi-res native midthickness (to-be-generated)
         midout = subdir / midthick.name.replace('81920', '327684')
 
@@ -71,6 +74,10 @@ def make_hires_subject(subdir, verbose=True):
             run(SURFRESAMPLE.format(surface=midthick, src=msm,
                                     trg=msmout, out=midout),
                 quiet=not verbose)
+        midthickness += (midout,)
+        sphere += (msmout,)
+
+    return midthickness, sphere
 
 
 def main():
@@ -80,9 +87,23 @@ def main():
         'HCP_', np.setdiff1d(subjects, missing)
     )
 
-    Parallel(n_jobs=N_PROC)(
+    midthicks, spheres = zip(*Parallel(n_jobs=N_PROC)(
         delayed(make_hires_subject)(CIVDIR / sub) for sub in subjects
-    )
+    ))
+
+    # calculate averaged hi-res spheres
+    for surfs, hemi in zip(zip(*spheres), ('L', 'R')):
+        sphere = images.average_surfaces(*surfs)
+        fn = f'tpl-civet_space-fsLR_den-164k_hemi-{hemi}_sphere.surf.gii'
+        nib.save(sphere, ATLASDIR / fn)
+        run(SPHEREFIX.format(sphererot=ATLASDIR / fn), quiet=True)
+
+    # also calculate midthickness average vertex areas (for use w/resampling)
+    for mids, hemi in zip(zip(*midthicks), ('left', 'right')):
+        vaavg = np.mean([images.vertex_areas(surf) for surf in mids], axis=0)
+        fn = (f'tpl-civet_space-fsLR_den-164k_hemi-{hemi}_'
+              'desc-vaavg_midthickness.surf.gii')
+        nib.save(images.construct_shape_gii(vaavg), ATLASDIR / fn)
 
 
 if __name__ == "__main__":

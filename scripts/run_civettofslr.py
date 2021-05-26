@@ -9,13 +9,17 @@ import shutil
 import time
 
 from joblib import Parallel, delayed
+import nibabel as nib
 import numpy as np
 
-from brainnotation.civet import register_subject
+from brainnotation.civet import register_subject, SPHEREFIX
+from brainnotation import images
+from netneurotools.utils import run
 
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()
 OUTDIR = Path('./data/derivatives/hcp').resolve()
+ATLASDIR = Path('./data/raw/atlases/civet').resolve()
 N_PROC = 4
 
 
@@ -36,6 +40,8 @@ def _regsubj(subdir, affine=None):
         out = register_subject(subdir, affine=affine, only_gen_affine=False)
         for (fn, mv) in zip(out, expected):
             shutil.move(fn, mv)
+
+    return expected
 
 
 def main():
@@ -60,9 +66,27 @@ def main():
         np.savetxt(final[n], rot, fmt='%.10f')
 
     # now generate the final aligned spherical surfaces
-    Parallel(n_jobs=N_PROC)(
+    spheres = Parallel(n_jobs=N_PROC)(
         delayed(_regsubj)(CIVDIR / sub, affine=final) for sub in subjects
     )
+
+    # create the average spheres (across subjects)
+    for surfs, hemi in zip(zip(*spheres), ('L', 'R')):
+        sphere = images.average_surfaces(*surfs)
+        fn = f'tpl-civet_space-fsLR_den-41k_hemi-{hemi}_sphere.surf.gii'
+        nib.save(sphere, ATLASDIR / fn)
+        run(SPHEREFIX.format(sphererot=ATLASDIR / fn), quiet=True)
+
+    # also calculate midthickness average vertex areas (for use w/resampling)
+    for hemi in ('left', 'right'):
+        vaavg = np.mean([
+            images.vertex_areas(
+                CIVDIR / sub / f'{sub}_mid_surface_rsl_{hemi}_81920.surf.gii'
+            ) for sub in subjects
+        ], axis=0)
+        fn = (f'tpl-civet_space-fsLR_den-41k_hemi-{hemi}_'
+              'desc-vaavg_midthickness.surf.gii')
+        nib.save(images.construct_shape_gii(vaavg), ATLASDIR / fn)
 
 
 if __name__ == "__main__":
