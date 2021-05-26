@@ -16,9 +16,11 @@ from brainnotation.utils import tmpname
 from netneurotools.utils import run
 
 METRICRESAMPLE = 'wb_command -metric-resample {metric} {src} {trg} ' \
-                 'ADAP_BARY_AREA {out} -area-metrics {srcarea} {trgarea}'
+                 'ADAP_BARY_AREA {out} -area-metrics {srcarea} {trgarea} ' \
+                 '-current-roi {srcmask}'
 LABELRESAMPLE = 'wb_command -label-resample {label} {src} {trg} ' \
-                'ADAP_BARY_AREA {out} -area-metrics {srcarea} {trgarea}'
+                'ADAP_BARY_AREA {out} -area-metrics {srcarea} {trgarea} ' \
+                '-current-roi {srcmask}'
 MASKSURF = 'wb_command -metric-mask {out} {trgmask} {out}'
 ATLASDIR = Path(resource_filename('brainnotation', 'data/atlases')).resolve()
 SURFFMT = 'tpl-{space}{trg}_den-{den}_hemi-{hemi}_sphere.surf.gii'
