@@ -31,13 +31,17 @@ MSMROT = '{msmpath} --levels=2 --verbose --inmesh={sphere} --indata={sulc} ' \
 MSMSUL = '{msmpath} --verbose --inmesh={sphererot} --indata={sulc} ' \
          '--refmesh={refmesh} --refdata={refdata} --conf={sulconf} '\
          '--out={msmsulout}'
+MSMPATH = resource_filename('brainnotation', 'data/msm')
 MSMCONF_ROT = resource_filename('brainnotation', 'data/MSMPreRotationConf')
 MSMCONF_SUL = resource_filename('brainnotation', 'data/MSMSulcStrainFinalConf')
-REFMESH = resource_filename('brainnotation', 'data/fsaverage.{hemi}_LR.'
-                            'spherical_std.164k_fs_LR.surf.gii')
-REFSULC = resource_filename('brainnotation', 'data/{hemi}.refsulc.164k_fs_LR.'
-                            'shape.gii')
-MSMPATH = resource_filename('brainnotation', 'data/msm')
+REFMESH = resource_filename(
+    'brainnotation', 'data/atlases/fsLR/'
+    'tpl-fsLR_den-164k_hemi-{hemi}_sphere.surf.gii'
+)
+REFSULC = resource_filename(
+    'brainnotation', 'data/atlases/fsLR/'
+    'tpl-fsLR_den-164k_hemi-{hemi}_desc-sulc_midthickness.shape.gii'
+)
 
 
 def read_surfmap(surfmap):

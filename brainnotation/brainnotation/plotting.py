@@ -7,7 +7,6 @@ from pathlib import Path
 from brainnotation.images import load_gifti
 from pkg_resources import resource_filename
 
-from matplotlib.cm import register_cmap
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa
 from nilearn.plotting import plot_surf
@@ -18,15 +17,11 @@ from brainnotation.transforms import DENSITIES, _check_hemi
 
 CIVETDIR = Path('/home/rmarkello/data/civet')
 ATLASDIR = Path(resource_filename('brainnotation', 'data/atlases'))
-REFMESH = resource_filename('brainnotation', 'data/fsaverage.{hemi}_LR.'
-                            'spherical_std.164k_fs_LR.surf.gii')
-REFSULC = resource_filename('brainnotation', 'data/{hemi}.refsulc.164k_fs_LR.'
-                            'shape.gii')
 HEMI = dict(L='left', R='right')
 ALIAS = dict(
     fslr='fsLR', fsavg='fsaverage', mni152='MNI152', mni='MNI152'
 )
-register_cmap('caret_blueorange', sns.blend_palette([
+plt.cm.register_cmap('caret_blueorange', sns.blend_palette([
         '#00d2ff', '#009eff', '#006cfe', '#0043fe',
         '#fd4604', '#fe6b01', '#ffd100', '#ffff04'
     ], as_cmap=True)
@@ -97,7 +92,7 @@ def plot_civet_msm(subjdir, rot=True):
 
 
 def plot_to_template(data, template, density, surf='inflated', space=None,
-                     hemi=None, shading=0.6, **kwargs):
+                     hemi=None, **kwargs):
     """
     Plots `data` on `template` surface
 
@@ -115,6 +110,9 @@ def plot_to_template(data, template, density, surf='inflated', space=None,
         `space`. Default: 'inflated'
     space : str, optional
         Space `template` is aligned to. Default: None
+    hemi : {'L', 'R'}, optional
+        If `data` is not a tuple, which hemisphere it should be plotted on.
+        Default: None
     kwargs : key-value pairs
         Passed directly to `nilearn.plotting.plot_surf`
 
@@ -137,91 +135,74 @@ def plot_to_template(data, template, density, surf='inflated', space=None,
         / f'tpl-{template}_den-{density}_hemi-{{hemi}}_desc-nomedialwall_' \
         'dparc.label.gii'
 
-    opts = dict(threshold=np.spacing(1), alpha=1.0)
+    opts = dict(alpha=1.0)
     opts.update(**kwargs)
-    if opts.get('bg_map') is not None and kwargs.get('alpha') is None:
+    if kwargs.get('bg_map') is not None and kwargs.get('alpha') is None:
         opts['alpha'] = 'auto'
 
     data, hemi = zip(*_check_hemi(data, hemi))
     n_surf = len(data)
     fig, axes = plt.subplots(n_surf, 2, subplot_kw={'projection': '3d'})
-    if n_surf == 1:
-        axes = (axes,)
+    axes = (axes,) if n_surf == 1 else axes.T
     for row, h, img in zip(axes, hemi, data):
-        img = load_gifti(img).agg_data()
-        med = load_gifti(str(medial).format(hemi=h)).agg_data()
         geom = load_gifti(str(fmt).format(hemi=h)).agg_data()
+        img = load_gifti(img).agg_data()
+        # set medial wall to NaN; this will avoid it being plotted
+        med = load_gifti(str(medial).format(hemi=h)).agg_data().astype(bool)
+        img[np.logical_not(med)] = np.nan
 
         for ax, view in zip(row, ['lateral', 'medial']):
+            ax.disable_mouse_rotation()
             plot_surf(geom, img, hemi=HEMI[h], axes=ax, view=view, **opts)
-            ax.collections[0].set_facecolors(
-                _fix_facecolors(
-                    ax.collections[0]._original_facecolor, *geom, med, shading
-                )
+            poly = ax.collections[0]
+            poly.set_facecolors(
+                _fix_facecolors(ax, poly._original_facecolor, *geom, view, h)
             )
 
     if not opts.get('colorbar', False):
         fig.tight_layout()
 
+    if n_surf == 1:
+        fig.subplots_adjust(wspace=-0.1)
+    else:
+        fig.subplots_adjust(wspace=-0.4, hspace=-0.15)
+
     return fig
 
 
-def _fix_facecolors(facecolors, vertices, faces, medial, shading=0.6):
+def _fix_facecolors(ax, facecolors, vertices, faces, view, hemi):
     """
-    Updates `facecolors` to reflect shading of mesh geometry + medial wall
+    Updates `facecolors` to reflect shading of mesh geometry
 
     Parameters
     ----------
+    ax : plt.Axes3dSubplot
+        Axis instance
     facecolors : (F,) array_like
         Original facecolors of plot
     vertices : (V, 3)
         Vertices of surface mesh
     faces : (F, 3)
         Triangles of surface mesh
-    medial : (V,) array_like
-        Boolean array wherere 0 indicates the medial wall
-    shading : (0, 1), optional
-        Shading intensity (0 = no shading, 1 = dark). Default: 0.7
+    view : {'lateral', 'medial'}
+        Plotted view of brain
 
     Returns
     -------
-    fc : (F,) array_like
-        Updated facecolors with approriate shading + medial wall removed
+    colors : (F,) array_like
+        Updated facecolors with approriate shading
     """
 
-    fc = np.asarray(facecolors).copy()
-    fc[np.any(np.logical_not(medial)[faces], axis=1)] = plt.cm.gray_r(0.5)
-    fc[:, :-1] *= _shading_intensity(vertices, faces, shading=shading)[:, None]
+    hemi_view = {'R': {'lateral': 'medial', 'medial': 'lateral'}}
+    views = {
+        'lateral': plt.cm.colors.LightSource(azdeg=225, altdeg=19.4712),
+        'medial': plt.cm.colors.LightSource(azdeg=45, altdeg=19.4712)
+    }
 
-    return fc
+    # reverse medial / lateral views if plotting right hemisphere
+    view = hemi_view.get(hemi, {}).get(view, view)
+    # re-shade colors
+    normals = ax._generate_normals(vertices[faces])
+    colors = ax._shade_colors(np.asarray(facecolors), normals, views[view])
 
-
-def _shading_intensity(vertices, faces, shading=0.7):
-    """
-    Generates intensity values to modify shading of triangle faces
-
-    Parameters
-    ----------
-    vertices : (V, 3)
-        Vertices of surface mesh
-    faces : (F, 3)
-        Triangles of surface mesh
-    shading : (0, 1), optional
-        Shading intensity (0 = no shading, 1 = dark). Default: 0.7
-
-    Returns
-    -------
-    intensity :
-    """
-
-    tris = vertices[faces]
-    norms = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
-    norms /= np.linalg.norm(norms, axis=1, keepdims=True)
-    intensity = norms @ np.array([0, 0, 1])
-    intensity[np.isnan(intensity)] = 1
-    min_int = np.min(intensity)
-    intensity = ((1 - shading)
-                 + (shading * (intensity - min_int)
-                    / ((np.percentile(intensity, 80) - min_int))))
-
-    return np.clip(intensity, None, 1)
+    return colors

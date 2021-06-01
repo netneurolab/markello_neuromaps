@@ -30,7 +30,8 @@ VOLRESAMP = 'wb_command -volume-resample {mni} {space} CUBIC {volume} ' \
 GENMIDTHICK = 'wb_command -surface-average {mid} -surf {white} -surf {pial}'
 FSTOGII = 'mris_convert {fs} {gii}'
 CIVET_MEDIAL = resource_filename(
-    'brainnotation', 'data/icbm_avg_medial_sym_mc_{hemi}.shape.gii'
+    'brainnotation', 'data/atlases/civet'
+    'tpl-civet_den-41k_hemi-L_desc-nomedialwall_dparc.label.gii'
 )
 
 
