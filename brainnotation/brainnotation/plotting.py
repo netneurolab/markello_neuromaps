@@ -27,8 +27,8 @@ plt.cm.register_cmap(
 )
 
 
-def plot_to_template(data, template, density, surf='inflated', space=None,
-                     hemi=None, **kwargs):
+def plot_surf_template(data, template, density, surf='inflated', space=None,
+                       hemi=None, **kwargs):
     """
     Plots `data` on `template` surface
 

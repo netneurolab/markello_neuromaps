@@ -121,8 +121,8 @@ def implot(image, **kwargs):
         out = MAPPING[space](image, density, hemi=hemi)
     else:
         out = image
-    fig = plotting.plot_to_template(out, 'fslr', '32k', hemi=hemi,
-                                    surf='veryinflated', **kwargs)
+    fig = plotting.plot_surf_template(out, 'fslr', '32k', hemi=hemi,
+                                      surf='veryinflated', **kwargs)
     fig.savefig(FIGDIR / f'{str(image.name)[:-9]}.png',
                 dpi=300, transparent=True, bbox_inches='tight')
     plt.close(fig=fig)
