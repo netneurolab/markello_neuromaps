@@ -4,6 +4,7 @@ Functions for fetching datasets (from the internet, if necessary)
 """
 
 from collections import namedtuple
+from pathlib import Path
 
 from nilearn.datasets.utils import _fetch_files
 from sklearn.utils import Bunch
@@ -48,8 +49,11 @@ def _fetch_atlas(atlas, density, keys, url=None, data_dir=None, verbose=1):
             .format(density, hemi, res) for res in keys for hemi in ['L', 'R']
         ]
 
-    data = _fetch_files(data_dir, files=[(f, url, opts) for f in filenames],
-                        verbose=verbose)
+    data = [
+        Path(fn) for fn in
+        _fetch_files(data_dir, files=[(f, url, opts) for f in filenames],
+                     verbose=verbose)
+    ]
     if atlas != 'MNI152':
         data = [SURFACE(*data[i:i + 2]) for i in range(0, len(data), 2)]
 
@@ -104,8 +108,11 @@ def fetch_regfusion(space, url=None, data_dir=None, verbose=1):
         for density in densities for hemi in ['L', 'R']
     ]
 
-    data = _fetch_files(data_dir, files=[(f, url, opts) for f in filenames],
-                        verbose=verbose)
+    data = [
+        Path(fn) for fn in
+        _fetch_files(data_dir, files=[(f, url, opts) for f in filenames],
+                     verbose=verbose)
+    ]
     data = [SURFACE(*data[i:i + 2]) for i in range(0, len(data), 2)]
 
     return Bunch(**dict(zip(densities, data)))
@@ -114,6 +121,13 @@ def fetch_regfusion(space, url=None, data_dir=None, verbose=1):
 def fetch_all_atlases(data_dir=None, verbose=1):
     for key, resolutions in DENSITIES.items():
         for res in resolutions:
-            fetcher = getattr(globals(), f'fetch_{key}')
+            fetcher = globals()[f'fetch_{key.lower()}']
             fetcher(res, data_dir=data_dir, verbose=verbose)
         fetch_regfusion(key, data_dir=data_dir, verbose=verbose)
+
+
+def fetch_atlas(atlas, density, url=None, data_dir=None, verbose=1):
+    if atlas not in DENSITIES:
+        raise ValueError(f'Invalid atlas: {atlas}')
+    fetcher = globals()[f'fetch_{atlas.lower()}']
+    return fetcher(density, url=url, data_dir=data_dir, verbose=verbose)
