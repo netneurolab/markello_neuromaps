@@ -3,7 +3,8 @@
 Implementation of surrogate map generation as in Burt et al., 2018, Nat Neuro
 """
 
-from joblib import Parallel, delayed
+import warnings
+
 import numpy as np
 from scipy.optimize import least_squares
 from scipy import sparse as ssp
@@ -27,15 +28,9 @@ def _make_weight_matrix(x, d0):
         Weight matrix
     """
 
-    # "W is the row-normalized weight matrix with zero diagonal and"
-    # "off-diagonal elements proportional to W[ij] = z[i]^-1 exp(-D[ij]/d0),"
-    # "where D[ij] is the surface-based geodesic distance between cortical"
-    # "areas i and j, and z[i] is a row-wise normalization factor."
-    # z[i] = row sum exp(-D[ij]/d0)
     with np.errstate(over='ignore'):
         weight = np.exp(-x / d0) * np.logical_not(np.eye(len(x), dtype=bool))
 
-    # avoid divide-by-zero errors
     with np.errstate(invalid='ignore'):
         return weight / np.sum(weight, axis=1)
 
@@ -65,8 +60,6 @@ def estimate_rho_d0(x, y, rho=None, d0=None):
         Estimate of `d0` based on least-squares fit between `x` and `y`
     """
 
-    # "two free parameters, rho and d0, are estimated by minimizing the "
-    # "residual sum-of-squares"
     def _estimate(parameters, x, y):
         rho, d0 = parameters
         y_hat = rho * (_make_weight_matrix(x, d0) @ y)
@@ -77,8 +70,6 @@ def estimate_rho_d0(x, y, rho=None, d0=None):
     if d0 is None:
         d0 = 1.0
 
-    # "y is a vector of first Bob-Cox transformed and then mean-subtracted
-    # map values"
     y, *_ = boxcox(y)
     y -= y.mean()
 
@@ -115,24 +106,16 @@ def make_surrogate(x, y, rho=None, d0=None, seed=None, return_order=False,
         Rank-order of `surrogate` before values were replaced with `y`
     """
 
-    # new random seed
     rs = np.random.default_rng(seed)
 
     if rho is None or d0 is None:
         rho, d0 = estimate_rho_d0(x, y, rho=rho, d0=d0)
 
-    # "using best-fit parameters rho_hat and d0_hat, surrogate maps y_surr"
-    # "are generated according to y_surr = (I - rho_hat * W[d0_hat])^-1 * u"
-    # "where u ~ normal(0, 1)"
     w = _make_weight_matrix(x, d0)
     u = rs.standard_normal(len(x))
     i = np.identity(len(x))
     surr = np.linalg.solve(i - rho * w, u)
 
-    # "to match surrogate map value distributions to the distributon of values"
-    # "in the corresponding empirical map, rank-ordered surrogate map values"
-    # "were re-assigned the corresponding rank-ordered values in the empirical"
-    # "data"
     order = surr.argsort()
     surr[order] = np.sort(y)
 
@@ -170,6 +153,13 @@ def batch_surrogates(x, y, rho=None, d0=None, seed=None, n_surr=1000,
         Generated surrogate maps
     """
 
+    try:
+        from joblib import Parallel, delayed
+        joblib_avail = True
+    except ImportError:
+        warnings.warn('joblib not available; cannot parallelize computations')
+        joblib_avail = False
+
     def _quick_surr(iw, ysort, seed=None):
         rs = np.random.default_rng(seed)
         u = rs.standard_normal(iw.shape[0])
@@ -188,15 +178,16 @@ def batch_surrogates(x, y, rho=None, d0=None, seed=None, n_surr=1000,
         rho, d0 = estimate_rho_d0(x, y)
     iw = np.identity(len(x)) - rho * _make_weight_matrix(x, d0)
     zeros = np.isclose(iw, 0)
-    # convert to sparse array if we can stand it
     if (zeros.sum() / iw.size) > 0.5:
         iw[np.isclose(iw, 0)] = 0
         iw = ssp.csr_matrix(iw)
     ysort = np.sort(y)
 
-    surrs = np.column_stack(
-        Parallel(n_jobs=n_jobs)(delayed(_quick_surr)(
-            iw, ysort, seed=seed) for seed in seeds)
-    )
+    if joblib_avail:
+        surrs = Parallel(n_jobs=n_jobs)(
+            delayed(_quick_surr)(iw, ysort, seed=seed) for seed in seeds
+        )
+    else:
+        surrs = [_quick_surr(iw, ysort, seed=seed) for seed in seeds]
 
-    return surrs
+    return np.column_stack(surrs)
