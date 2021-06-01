@@ -8,16 +8,12 @@ from pathlib import Path
 from pkg_resources import resource_filename
 import tempfile
 
-import boto3
-from botocore.exceptions import ClientError
 import nibabel as nib
 import numpy as np
 
-from netneurotools.freesurfer import check_fs_subjid
-from netneurotools.utils import run
-
-from .civet import construct_shape_gii, obj_to_gifti, resample_surface_map
-from .utils import tmpname
+from brainnotation.civet import (construct_shape_gii, obj_to_gifti,
+                                 resample_surface_map)
+from brainnotation.utils import tmpname, run, check_fs_subjid
 
 VOLTOSURF = 'wb_command -volume-to-surface-mapping {volume} {srcmid} ' \
             '{out} -ribbon-constrained {white} {pial} -interpolate TRILINEAR'
@@ -117,6 +113,9 @@ def get_files(subject, out_dir=None, profile='hcp', verbose=False):
     out_dir : pathlib.Path
         Path to downloaded data
     """
+
+    import boto3
+    from botocore.exceptions import ClientError
 
     fn = resource_filename('brainnotation', 'data/hcpfiles.txt')
     with open(fn) as src:

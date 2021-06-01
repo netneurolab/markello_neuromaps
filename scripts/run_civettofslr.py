@@ -12,9 +12,9 @@ from joblib import Parallel, delayed
 import nibabel as nib
 import numpy as np
 
-from brainnotation.civet import register_subject, SPHEREFIX
 from brainnotation import images
-from netneurotools.utils import run
+from brainnotation.civet import register_subject, SPHEREFIX
+from brainnotation.utils import run
 
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()

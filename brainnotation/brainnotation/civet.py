@@ -11,11 +11,9 @@ import tempfile
 
 import numpy as np
 
-from netneurotools.civet import read_civet
-from netneurotools.utils import run
-
-from .images import (fix_coordsys, obj_to_gifti, fsmorph_to_gifti)
-from .points import get_shared_triangles, which_triangle
+from brainnotation.images import (fix_coordsys, obj_to_gifti, fsmorph_to_gifti)
+from brainnotation.points import get_shared_triangles, which_triangle
+from brainnotation.utils import run
 
 HEMI = dict(left='L', lh='L', L='L', right='R', rh='R', R='R')
 SMOOTH = 'mris_smooth -n 3 -nw {white} {smoothwm}'
@@ -42,6 +40,41 @@ REFSULC = resource_filename(
     'brainnotation', 'data/atlases/fsLR/'
     'tpl-fsLR_den-164k_hemi-{hemi}_desc-sulc_midthickness.shape.gii'
 )
+
+
+def read_civet_surf(fname):
+    """
+    Reads a CIVET-style .obj geometry file
+
+    Parameters
+    ----------
+    fname : str or os.PathLike
+        Filepath to .obj file
+
+    Returns
+    -------
+    vertices : (N, 3)
+        Vertices of surface mesh
+    triangles : (T, 3)
+        Triangles comprising surface mesh
+    """
+
+    k, polygons = 0, []
+    with open(fname, 'r') as src:
+        n_vert = int(src.readline().split()[6])
+        vertices = np.zeros((n_vert, 3))
+        for i, line in enumerate(src):
+            if i < n_vert:
+                vertices[i] = [float(i) for i in line.split()]
+            elif i >= (2 * n_vert) + 5:
+                if not line.strip():
+                    k = 1
+                elif k == 1:
+                    polygons.extend([int(i) for i in line.split()])
+
+    triangles = np.reshape(np.asarray(polygons), (-1, 3))
+
+    return vertices, triangles
 
 
 def read_surfmap(surfmap):
@@ -96,7 +129,7 @@ def resample_surface_map(source, morph, target, surfmap):
     """
 
     if isinstance(source, (str, os.PathLike)):
-        source = read_civet(source)
+        source = read_civet_surf(source)
     if isinstance(morph, (str, os.PathLike)):
         morph = np.loadtxt(morph)
     if len(morph) != len(source[0]):
@@ -104,7 +137,7 @@ def resample_surface_map(source, morph, target, surfmap):
                          'vertices from provided `source` surface')
 
     if isinstance(target, (str, os.PathLike)):
-        target = read_civet(target)
+        target = read_civet_surf(target)
     if isinstance(surfmap, (str, os.PathLike)):
         surfmap = read_surfmap(surfmap)
     if len(surfmap[0]) != len(target[0]):

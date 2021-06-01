@@ -11,7 +11,7 @@ from joblib import Parallel, delayed
 import numpy as np
 
 from brainnotation.regfusion import (fs_regfusion, hcp_regfusion,
-                                     civet_regfusion)
+                                     civet_regfusion, get_files)
 
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()
@@ -72,6 +72,9 @@ def main():
     subjects = np.setdiff1d(subjects, missing)
 
     pool, fusion = Parallel(n_jobs=N_PROC), delayed(_regfusion)
+    # get files first
+    pool(delayed(get_files)(sub, OUTDIR, verbose=False) for sub in subjects)
+    # now run reg-fusion for all the different formats
     for method in REGFUNCS:
         for resolution in RESOLUTIONS[method]:
             pool(fusion(DATADIR / sub, method, resolution) for sub in subjects)

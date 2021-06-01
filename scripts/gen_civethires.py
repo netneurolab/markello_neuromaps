@@ -13,7 +13,7 @@ import numpy as np
 
 from brainnotation import images
 from brainnotation.civet import SPHEREFIX
-from netneurotools.utils import run
+from brainnotation.utils import run
 
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()

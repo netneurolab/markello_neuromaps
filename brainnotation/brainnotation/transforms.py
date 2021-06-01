@@ -12,8 +12,7 @@ import numpy as np
 from scipy.interpolate import interpn
 
 from brainnotation.images import construct_shape_gii, load_gifti
-from brainnotation.utils import tmpname
-from netneurotools.utils import run
+from brainnotation.utils import tmpname, run
 
 METRICRESAMPLE = 'wb_command -metric-resample {metric} {src} {trg} ' \
                  'ADAP_BARY_AREA {out} -area-metrics {srcarea} {trgarea} ' \
@@ -104,20 +103,89 @@ def _vol_to_surf(img, den, space, method='linear'):
 
 
 def mni_to_civet(img, civet_density, method='linear'):
+    """
+    Projects `img` in MNI152 space to CIVET surface
+
+    Parameters
+    ----------
+    img : str or os.PathLike or niimg_like
+        Image in MNI152 space to be projected
+    civet_density : {'41k', '164k'}
+        Desired output density of CIVET surface
+    method : {'nearest', 'linear'}, optional
+        Method for projection. Specify 'nearest' if `img` is a label image.
+        Default: 'linear'
+
+    Returns
+    -------
+    civet : (2,) tuple-of-nib.GiftiImage
+        Projected `img` on CIVET surface
+    """
+
     return _vol_to_surf(img, civet_density, 'civet', method)
 
 
 def mni_to_fsaverage(img, fsavg_density, method='linear'):
+    """
+    Projects `img` in MNI152 space to fsaverage surface
+
+    Parameters
+    ----------
+    img : str or os.PathLike or niimg_like
+        Image in MNI152 space to be projected
+    fsavg_density : {'3k', '10k', '41k', '164k'}
+        Desired output density of fsaverage surface
+    method : {'nearest', 'linear'}, optional
+        Method for projection. Specify 'nearest' if `img` is a label image.
+        Default: 'linear'
+
+    Returns
+    -------
+    fsaverage : (2,) tuple-of-nib.GiftiImage
+        Projected `img` on fsaverage surface
+    """
+
     return _vol_to_surf(img, fsavg_density, 'fsaverage', method)
 
 
 def mni_to_fslr(img, fslr_density, method='linear'):
+    """
+    Projects `img` in MNI152 space to fsLR surface
+
+    Parameters
+    ----------
+    img : str or os.PathLike or niimg_like
+        Image in MNI152 space to be projected
+    fslr_density : {'32k', '164k'}
+        Desired output density of fsLR surface
+    method : {'nearest', 'linear'}, optional
+        Method for projection. Specify 'nearest' if `img` is a label image.
+        Default: 'linear'
+
+    Returns
+    -------
+    fsLR : (2,) tuple-of-nib.GiftiImage
+        Projected `img` on fsLR surface
+    """
     return _vol_to_surf(img, fslr_density, 'fsLR', method)
 
 
 def _check_hemi(data, hemi):
-    """ Utility to check that `data` and `hemi` jive
+    """ Utility to check that `data` and `hemi` jibe
+
+    Parameters
+    ----------
+    data : str or os.PathLike or tuple
+        Input data
+    hemi : str
+        Hemisphere(s) corresponding to `data
+
+    Returns
+    -------
+    zipped : zip
+        Zipped instance of `data` and `hemi`
     """
+
     if isinstance(data, (str, os.PathLike)) or not hasattr(data, '__len__'):
         data = (data,)
     if len(data) == 1 and hemi is None:
@@ -134,6 +202,8 @@ def _check_hemi(data, hemi):
 
 def _surf_to_surf(data, srcparams, trgparams, method='linear', hemi=None):
     """
+    Resamples surface `data` to another surface
+
     Parameters
     ----------
     data : str or os.Pathlike or tuple
@@ -142,9 +212,14 @@ def _surf_to_surf(data, srcparams, trgparams, method='linear', hemi=None):
     srcparams, trgparams : dict
         Dictionary with keys ['space', 'den', 'trg']
     method : {'nearest', 'linear'}, optional
-        Method for projection. Default: 'linear'
+        Method for resampling. Default: 'linear'
     hemi : str or None
         Hemisphere of `data` if `data` is a single image. Default: None
+
+    Returns
+    -------
+    resampled : tuple-of-nib.GiftiImage
+        Input `data` resampled to new surface
     """
 
     methods = ('nearest', 'linear')
@@ -164,7 +239,7 @@ def _surf_to_surf(data, srcparams, trgparams, method='linear', hemi=None):
             raise ValueError(f'Invalid density for {space} space: {den}')
     func = METRICRESAMPLE if method == 'linear' else LABELRESAMPLE
 
-    out = ()
+    resampled = ()
     for img, hemi in _check_hemi(data, hemi):
         srcparams['hemi'] = trgparams['hemi'] = hemi
         params = dict(
@@ -179,16 +254,40 @@ def _surf_to_surf(data, srcparams, trgparams, method='linear', hemi=None):
         )
         for fn in (func, MASKSURF):
             run(fn.format(**params), quiet=True)
-        out += (construct_shape_gii(
+        resampled += (construct_shape_gii(
             np.nan_to_num(load_gifti(params['out']).agg_data())
         ),)
         params['out'].unlink()
 
-    return out
+    return resampled
 
 
 def civet_to_fslr(data, density, fslr_density='32k', hemi=None,
                   method='linear'):
+    """
+    Resamples `data` on CIVET surface to the fsLR surface
+
+    Parameters
+    ----------
+    data : str or os.PathLike or nib.GiftiImage or tuple
+        Input CIVET data to be resampled to fsLR surface
+    density : {'41k', '164k'}
+        Resolution of provided `data`
+    fslr_density : {'4k', '8k', '32k', '164k'}, optional
+        Desired density of output fsLR surface. Default: '32k'
+    hemi : {'L', 'R'}, optional
+        If `data` is not a tuple this specifies the hemisphere the data are
+        representing. Default: None
+    method : {'nearest', 'linear'}, optional
+        Method for resampling. Specify 'nearest' if `data` are label images.
+        Default: 'linear'
+
+    Returns
+    -------
+    resampled : tuple-of-nib.GiftiImage
+        Input `data` resampled to new surface
+    """
+
     srcparams = dict(space='civet', den=density, trg='_space-fsLR')
     trgparams = dict(space='fsLR', den=fslr_density, trg='')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
@@ -196,6 +295,30 @@ def civet_to_fslr(data, density, fslr_density='32k', hemi=None,
 
 def fslr_to_civet(data, density, civet_density='41k', hemi=None,
                   method='linear'):
+    """
+    Resamples `data` on fsLR surface to the CIVET surface
+
+    Parameters
+    ----------
+    data : str or os.PathLike or nib.GiftiImage or tuple
+        Input fsLR data to be resampled to CIVET surface
+    density : {'4k', '8k', '32k', '164k'}
+        Resolution of provided `data`
+    civet_density : {'41k', '164k'}, optional
+        Desired density of output CIVET surface. Default: '41k'
+    hemi : {'L', 'R'}, optional
+        If `data` is not a tuple this specifies the hemisphere the data are
+        representing. Default: None
+    method : {'nearest', 'linear'}, optional
+        Method for resampling. Specify 'nearest' if `data` are label images.
+        Default: 'linear'
+
+    Returns
+    -------
+    resampled : tuple-of-nib.GiftiImage
+        Input `data` resampled to new surface
+    """
+
     srcparams = dict(space='fsLR', den=density, trg='')
     trgparams = dict(space='civet', den=civet_density, trg='_space-fsLR')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
@@ -203,6 +326,29 @@ def fslr_to_civet(data, density, civet_density='41k', hemi=None,
 
 def civet_to_fsaverage(data, density, fsavg_density='41k', hemi=None,
                        method='linear'):
+    """
+    Resamples `data` on CIVET surface to the fsaverage surface
+
+    Parameters
+    ----------
+    data : str or os.PathLike or nib.GiftiImage or tuple
+        Input CIVET data to be resampled to fsaverage surface
+    density : {'41k', '164k'}
+        Resolution of provided `data`
+    fsavg_density : {'3k', '10k', '41k', '164k'}, optional
+        Desired density of output fsaverage surface. Default: '32k'
+    hemi : {'L', 'R'}, optional
+        If `data` is not a tuple this specifies the hemisphere the data are
+        representing. Default: None
+    method : {'nearest', 'linear'}, optional
+        Method for resampling. Specify 'nearest' if `data` are label images.
+        Default: 'linear'
+
+    Returns
+    -------
+    resampled : tuple-of-nib.GiftiImage
+        Input `data` resampled to new surface
+    """
     srcparams = dict(space='civet', den=density, trg='_space-fsaverage')
     trgparams = dict(space='fsaverage', den=fsavg_density, trg='')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
@@ -210,6 +356,30 @@ def civet_to_fsaverage(data, density, fsavg_density='41k', hemi=None,
 
 def fsaverage_to_civet(data, density, civet_density='41k', hemi=None,
                        method='linear'):
+    """
+    Resamples `data` on fsaverage surface to the CIVET surface
+
+    Parameters
+    ----------
+    data : str or os.PathLike or nib.GiftiImage or tuple
+        Input fsaverage data to be resampled to CIVET surface
+    density : {'3k', '10k', '41k', '164k'}
+        Resolution of provided `data`
+    civet__density : {'41k', '164k'}, optional
+        Desired density of output CIVET surface. Default: '41k'
+    hemi : {'L', 'R'}, optional
+        If `data` is not a tuple this specifies the hemisphere the data are
+        representing. Default: None
+    method : {'nearest', 'linear'}, optional
+        Method for resampling. Specify 'nearest' if `data` are label images.
+        Default: 'linear'
+
+    Returns
+    -------
+    resampled : tuple-of-nib.GiftiImage
+        Input `data` resampled to new surface
+    """
+
     srcparams = dict(space='fsaverage', den=density, trg='')
     trgparams = dict(space='civet', den=civet_density, trg='_space-fsaverage')
     return _surf_to_surf(data, srcparams, trgparams, method, hemi)
