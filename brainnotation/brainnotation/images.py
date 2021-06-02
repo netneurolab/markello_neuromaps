@@ -11,8 +11,6 @@ from nibabel.filebasedimages import ImageFileError
 import numpy as np
 from scipy.interpolate import griddata
 
-from brainnotation.civet import read_civet_surf
-
 
 def construct_surf_gii(vert, tri):
     """
@@ -148,6 +146,8 @@ def obj_to_gifti(obj, fn=None):
     fn : os.PathLike
         Path to saved image file
     """
+
+    from brainnotation.civet import read_civet_surf
 
     img = construct_surf_gii(*read_civet_surf(Path(obj)))
     if fn is None:
