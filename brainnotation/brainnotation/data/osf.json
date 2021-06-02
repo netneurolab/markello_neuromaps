@@ -12,7 +12,7 @@
                 "4mw3a",
                 "60b684ab3a6df1020dd50706"
             ],
-            "md5": "602873f0f9552406ead938b67cf5c555"
+            "md5": "9d8d0e163cf6164ef000a0fb1506408e"
         }
     },
     "fsaverage": {
@@ -51,14 +51,14 @@
                 "4mw3a",
                 "60b684b19096b7020e6424b1"
             ],
-            "md5": "457ffc5622ea88c2f79cad566f045d5f"
+            "md5": "b7ba3039b3fff65c9f396e2eb1b064c8"
         },
         "8k": {
             "url": [
                 "4mw3a",
                 "60b684b39096b7021b63cf7f"
             ],
-            "md5": "db71f8dff8bc6b79118673c2bc01a159"
+            "md5": "3879107951b1543654b9a689b485fc44"
         },
         "32k": {
             "url": [
@@ -81,21 +81,21 @@
                 "4mw3a",
                 "60b684be9096b7021c63d9e2"
             ],
-            "md5": "3b59d23eb08e7c5c23c55023cb3a97d1"
+            "md5": "af9f6ef767af819899394e5cfdc5e155"
         },
         "2mm": {
             "url": [
                 "4mw3a",
                 "60b684bd3a6df1021cd4e983"
             ],
-            "md5": "495bd5bbd054f96ebe140ab4e77f2d2c"
+            "md5": "e2cd04cda23f1ca136100b92a9fd5e8f"
         },
         "3mm": {
             "url": [
                 "4mw3a",
                 "60b684ba3a6df1021bd4df3a"
             ],
-            "md5": "42838c3d259264c4947f0ba7534e6595"
+            "md5": "512381cf1a341aff739577b8331ba016"
         }
     },
     "regfusion": {

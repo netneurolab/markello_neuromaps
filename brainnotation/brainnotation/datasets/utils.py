@@ -40,7 +40,7 @@ def _osfify_urls(data):
     return data
 
 
-def _get_dataset_info(name):
+def get_dataset_info(name):
     """
     Returns url and MD5 checksum for dataset `name`
 
@@ -67,7 +67,7 @@ def _get_dataset_info(name):
                        .format(name, sorted(osf_resources.keys())))
 
 
-def _get_data_dir(data_dir=None):
+def get_data_dir(data_dir=None):
     """
     Gets path to brainnotation data directory
 
@@ -75,7 +75,7 @@ def _get_data_dir(data_dir=None):
     ----------
     data_dir : str, optional
         Path to use as data directory. If not specified, will check for
-        environmental variable 'BRAINNOTATIOn_DATA'; if that is not set, will
+        environmental variable 'BRAINNOTATION_DATA'; if that is not set, will
         use `~/brainnotation-data` instead. Default: None
 
     Returns
@@ -85,7 +85,7 @@ def _get_data_dir(data_dir=None):
     """
 
     if data_dir is None:
-        data_dir = os.environ.get('BRAINNOTATIOn_DATA',
+        data_dir = os.environ.get('BRAINNOTATION_DATA',
                                   os.path.join('~', 'brainnotation-data'))
     data_dir = os.path.expanduser(data_dir)
     if not os.path.exists(data_dir):
