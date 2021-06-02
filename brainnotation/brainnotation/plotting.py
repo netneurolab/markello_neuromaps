@@ -3,22 +3,16 @@
 Functionality for plotting
 """
 
-from pathlib import Path
-from brainnotation.images import load_gifti
-from pkg_resources import resource_filename
-
 from matplotlib import colors as mcolors, pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa
 from nilearn.plotting import plot_surf
 import numpy as np
 
-from brainnotation.transforms import DENSITIES, _check_hemi
+from brainnotation.datasets import ALIAS, fetch_atlas
+from brainnotation.images import load_gifti
+from brainnotation.transforms import _check_hemi
 
-ATLASDIR = Path(resource_filename('brainnotation', 'data/atlases'))
 HEMI = dict(L='left', R='right')
-ALIAS = dict(
-    fslr='fsLR', fsavg='fsaverage', mni152='MNI152', mni='MNI152'
-)
 plt.cm.register_cmap(
     'caret_blueorange', mcolors.LinearSegmentedColormap.from_list('blend', [
         '#00d2ff', '#009eff', '#006cfe', '#0043fe',
@@ -28,7 +22,7 @@ plt.cm.register_cmap(
 
 
 def plot_surf_template(data, template, density, surf='inflated', space=None,
-                       hemi=None, **kwargs):
+                       hemi=None, data_dir=None, **kwargs):
     """
     Plots `data` on `template` surface
 
@@ -44,8 +38,6 @@ def plot_surf_template(data, template, density, surf='inflated', space=None,
     surf : str, optional
         Surface on which `data` should be plotted. Must be valid for specified
         `space`. Default: 'inflated'
-    space : str, optional
-        Space `template` is aligned to. Default: None
     hemi : {'L', 'R'}, optional
         If `data` is not a tuple, which hemisphere it should be plotted on.
         Default: None
@@ -58,41 +50,37 @@ def plot_surf_template(data, template, density, surf='inflated', space=None,
         Plotted figure
     """
 
+    atlas = fetch_atlas(template, density, data_dir=data_dir, verbose=0)
     template = ALIAS.get(template, template)
-    if template not in DENSITIES or template == 'MNI152':
-        raise ValueError('Invalid space argument')
-    if density not in DENSITIES[template]:
-        raise ValueError('Invalid density argument')
-    space = f'_space-{space}' if space is not None else ''
-
-    fmt = ATLASDIR / template \
-        / f'tpl-{template}{space}_den-{density}_hemi-{{hemi}}_{surf}.surf.gii'
-    medial = ATLASDIR / template \
-        / f'tpl-{template}_den-{density}_hemi-{{hemi}}_desc-nomedialwall_' \
-        'dparc.label.gii'
+    if template == 'MNI152':
+        raise ValueError('Cannot plot MNI152 on the surface. Try performing '
+                         'registration fusion to project data to the surface '
+                         'and plotting the projection instead.')
+    surf, medial = atlas[surf], atlas['medial']
 
     opts = dict(alpha=1.0)
     opts.update(**kwargs)
     if kwargs.get('bg_map') is not None and kwargs.get('alpha') is None:
         opts['alpha'] = 'auto'
 
-    data, hemi = zip(*_check_hemi(data, hemi))
+    data, hemispheres = zip(*_check_hemi(data, hemi))
     n_surf = len(data)
     fig, axes = plt.subplots(n_surf, 2, subplot_kw={'projection': '3d'})
     axes = (axes,) if n_surf == 1 else axes.T
-    for row, h, img in zip(axes, hemi, data):
-        geom = load_gifti(str(fmt).format(hemi=h)).agg_data()
+    for row, hemi, img in zip(axes, hemispheres, data):
+        geom = load_gifti(getattr(surf, hemi)).agg_data()
         img = load_gifti(img).agg_data()
         # set medial wall to NaN; this will avoid it being plotted
-        med = load_gifti(str(medial).format(hemi=h)).agg_data().astype(bool)
+        med = load_gifti(getattr(medial, hemi)).agg_data().astype(bool)
         img[np.logical_not(med)] = np.nan
 
         for ax, view in zip(row, ['lateral', 'medial']):
             ax.disable_mouse_rotation()
-            plot_surf(geom, img, hemi=HEMI[h], axes=ax, view=view, **opts)
+            plot_surf(geom, img, hemi=HEMI[hemi], axes=ax, view=view, **opts)
             poly = ax.collections[0]
             poly.set_facecolors(
-                _fix_facecolors(ax, poly._original_facecolor, *geom, view, h)
+                _fix_facecolors(ax, poly._original_facecolor,
+                                *geom, view, hemi)
             )
 
     if not opts.get('colorbar', False):

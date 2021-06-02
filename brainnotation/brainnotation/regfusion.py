@@ -11,8 +11,9 @@ import tempfile
 import nibabel as nib
 import numpy as np
 
-from brainnotation.civet import (construct_shape_gii, obj_to_gifti,
-                                 resample_surface_map)
+from brainnotation.civet import resample_surface_map
+from brainnotation.datasets import fetch_atlas
+from brainnotation.images import construct_shape_gii, obj_to_gifti
 from brainnotation.utils import tmpname, run, check_fs_subjid
 
 VOLTOSURF = 'wb_command -volume-to-surface-mapping {volume} {srcmid} ' \
@@ -25,10 +26,6 @@ VOLRESAMP = 'wb_command -volume-resample {mni} {space} CUBIC {volume} ' \
             '-warp {warp} -fnirt {space}'
 GENMIDTHICK = 'wb_command -surface-average {mid} -surf {white} -surf {pial}'
 FSTOGII = 'mris_convert {fs} {gii}'
-CIVET_MEDIAL = resource_filename(
-    'brainnotation', 'data/atlases/civet'
-    'tpl-civet_den-41k_hemi-L_desc-nomedialwall_dparc.label.gii'
-)
 
 
 def minc2nii(img, fn=None):
@@ -358,20 +355,23 @@ def civet_regfusion(subdir, res='41k', verbose=False):
     tempdir = Path(tempfile.gettempdir()) / (subid + '_regfusion')
     tempdir.mkdir(exist_ok=True, parents=True)
 
+    # civet medial wall
+    civet_medial = fetch_atlas('civet', '41k')['medial']
+
     # run the actual commands
     generated = defaultdict(list)
     nii = minc2nii(mnc, mnc)
     for img, name in zip(make_xyz(nii), ('x', 'y', 'z')):
         template = tmpname(suffix='.nii.gz', directory=tempdir)
         nib.save(img, template)
-        for hemi in ('left', 'right'):
+        for hemi, medial in zip(('left', 'right'), civet_medial):
             params = dict(
                 volume=template,
                 white=surfdir / natobj.format(surf='white', hemi=hemi),
                 pial=surfdir / natobj.format(surf='gray', hemi=hemi),
                 srcmid=surfdir / natobj.format(surf='mid', hemi=hemi),
                 trgmid=surfdir / rslobj.format(surf='mid', hemi=hemi),
-                fsmask=Path(CIVET_MEDIAL.format(hemi=hemi)),
+                fsmask=medial,
                 surfmap=(subdir / 'transforms' / 'surfreg'
                          / f'{subid}_{hemi}_surfmap.sm'),
                 out=tmpname(suffix='.func.gii', directory=tempdir),

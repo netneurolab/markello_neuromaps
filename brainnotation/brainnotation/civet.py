@@ -11,6 +11,7 @@ import tempfile
 
 import numpy as np
 
+from brainnotation.datasets import fetch_atlas
 from brainnotation.images import (fix_coordsys, obj_to_gifti, fsmorph_to_gifti)
 from brainnotation.points import get_shared_triangles, which_triangle
 from brainnotation.utils import run
@@ -32,14 +33,6 @@ MSMSUL = '{msmpath} --verbose --inmesh={sphererot} --indata={sulc} ' \
 MSMPATH = resource_filename('brainnotation', 'data/msm')
 MSMCONF_ROT = resource_filename('brainnotation', 'data/MSMPreRotationConf')
 MSMCONF_SUL = resource_filename('brainnotation', 'data/MSMSulcStrainFinalConf')
-REFMESH = resource_filename(
-    'brainnotation', 'data/atlases/fsLR/'
-    'tpl-fsLR_den-164k_hemi-{hemi}_sphere.surf.gii'
-)
-REFSULC = resource_filename(
-    'brainnotation', 'data/atlases/fsLR/'
-    'tpl-fsLR_den-164k_hemi-{hemi}_desc-sulc_midthickness.shape.gii'
-)
 
 
 def read_civet_surf(fname):
@@ -235,6 +228,9 @@ def register_subject(subdir, affine=None, only_gen_affine=True, verbose=False):
     # we need the spherical meshes + sulcal depth maps for the subjects
     spheres, sulcs = civet_sphere(subdir, resampled=True)
 
+    # get reference fsLR mesh + sulcal depth info
+    fslr = fetch_atlas('fslr', '164k', verbose=verbose)
+
     generated = tuple()
     for n, hemi in enumerate(('left', 'right')):
         hemil = HEMI[hemi]
@@ -242,8 +238,8 @@ def register_subject(subdir, affine=None, only_gen_affine=True, verbose=False):
             sphere=spheres[n],
             sulc=sulcs[n],
             msmpath=Path(MSMPATH),
-            refmesh=Path(REFMESH.format(hemi=hemil)),
-            refdata=Path(REFSULC.format(hemi=hemil)),
+            refmesh=getattr(fslr['sphere'], hemil),
+            refdata=getattr(fslr['sulc'], hemil),
             msmrotout=tempdir / 'msmrot' / f'{hemil}.',
             msmsulout=tempdir / 'msmsulc' / f'{hemil}.',
             rotconf=Path(MSMCONF_ROT),

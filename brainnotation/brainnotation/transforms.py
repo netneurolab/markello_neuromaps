@@ -5,12 +5,13 @@ Functionality for transforming files between spaces
 
 import os
 from pathlib import Path
-from pkg_resources import resource_filename
 
 import nibabel as nib
 import numpy as np
 from scipy.interpolate import interpn
 
+from brainnotation.datasets import (DENSITIES, fetch_atlas, fetch_regfusion,
+                                    get_atlas_dir)
 from brainnotation.images import construct_shape_gii, load_gifti
 from brainnotation.utils import tmpname, run
 
@@ -21,16 +22,9 @@ LABELRESAMPLE = 'wb_command -label-resample {label} {src} {trg} ' \
                 'ADAP_BARY_AREA {out} -area-metrics {srcarea} {trgarea} ' \
                 '-current-roi {srcmask}'
 MASKSURF = 'wb_command -metric-mask {out} {trgmask} {out}'
-ATLASDIR = Path(resource_filename('brainnotation', 'data/atlases')).resolve()
 SURFFMT = 'tpl-{space}{trg}_den-{den}_hemi-{hemi}_sphere.surf.gii'
 VAFMT = 'tpl-{space}_den-{den}_hemi-{hemi}_desc-vaavg_midthickness.shape.gii'
 MLFMT = 'tpl-{space}_den-{den}_hemi-{hemi}_desc-nomedialwall_dparc.label.gii'
-DENSITIES = dict(
-    civet=['41k', '164k'],
-    fsaverage=['3k', '10k', '41k', '164k'],
-    fsLR=['4k', '8k', '32k', '164k'],
-    MNI152=['1mm', '2mm', '3mm']
-)
 
 
 def _regfusion_project(data, ras, affine, method='linear'):
@@ -93,9 +87,7 @@ def _vol_to_surf(img, den, space, method='linear'):
         img = nib.load(img)
 
     out = ()
-    for hemi in 'LR':
-        ras = ATLASDIR / 'regfusion' \
-            / f'tpl-MNI152_space-{space}_den-{den}_hemi-{hemi}_regfusion.txt'
+    for ras in fetch_regfusion(space)[den]:
         out += (_regfusion_project(img.get_fdata(), np.loadtxt(ras),
                                    img.affine, method=method),)
 
@@ -167,6 +159,7 @@ def mni_to_fslr(img, fslr_density, method='linear'):
     fsLR : (2,) tuple-of-nib.GiftiImage
         Projected `img` on fsLR surface
     """
+
     return _vol_to_surf(img, fslr_density, 'fsLR', method)
 
 
@@ -239,23 +232,28 @@ def _surf_to_surf(data, srcparams, trgparams, method='linear', hemi=None):
             raise ValueError(f'Invalid density for {space} space: {den}')
     func = METRICRESAMPLE if method == 'linear' else LABELRESAMPLE
 
+    for atl in (srcparams, trgparams):
+        fetch_atlas(atl['space'], atl['den'])
+    srcdir = get_atlas_dir(srcparams['space'])
+    trgdir = get_atlas_dir(trgparams['space'])
+
     resampled = ()
     for img, hemi in _check_hemi(data, hemi):
         srcparams['hemi'] = trgparams['hemi'] = hemi
         params = dict(
             metric=Path(img).resolve(),
             out=tmpname('.func.gii'),
-            src=ATLASDIR / srcparams['space'] / SURFFMT.format(**srcparams),
-            trg=ATLASDIR / trgparams['space'] / SURFFMT.format(**trgparams),
-            srcarea=ATLASDIR / srcparams['space'] / VAFMT.format(**srcparams),
-            trgarea=ATLASDIR / trgparams['space'] / VAFMT.format(**trgparams),
-            srcmask=ATLASDIR / srcparams['space'] / MLFMT.format(**srcparams),
-            trgmask=ATLASDIR / trgparams['space'] / MLFMT.format(**trgparams)
+            src=srcdir / SURFFMT.format(**srcparams),
+            trg=trgdir / SURFFMT.format(**trgparams),
+            srcarea=srcdir / VAFMT.format(**srcparams),
+            trgarea=trgdir / VAFMT.format(**trgparams),
+            srcmask=srcdir / MLFMT.format(**srcparams),
+            trgmask=trgdir / MLFMT.format(**trgparams)
         )
         for fn in (func, MASKSURF):
             run(fn.format(**params), quiet=True)
         resampled += (construct_shape_gii(
-            np.nan_to_num(load_gifti(params['out']).agg_data())
+            load_gifti(params['out']).agg_data()
         ),)
         params['out'].unlink()
 
