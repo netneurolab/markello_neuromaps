@@ -14,7 +14,6 @@ from brainnotation.datasets.utils import get_data_dir, get_dataset_info
 
 MATCH = re.compile(
     r'source-(\S+)_desc-(\S+)_space-(\S+)_(?:den|res)-(\d+[k|m]{1,2})_'
-    r'hemi-'
 )
 
 
@@ -144,7 +143,7 @@ def fetch_annotation(*, source=None, desc=None, space=None, den=None, res=None,
     filenames = [
         (os.path.join('annotations', dset['fname']),
          dset['url'],
-         {'md5sum': dset['md5']}) for dset in info
+         {'md5sum': dset['checksum']}) for dset in info
     ]
     data = _fetch_files(data_dir, files=filenames, verbose=verbose,
                         session=session)
