@@ -65,7 +65,7 @@ def construct_shape_gii(data, names=None, intent='NIFTI_INTENT_SHAPE'):
         names = [{} for _ in range(data.shape[1])]
 
     return nib.GiftiImage(darrays=[
-        nib.gifti.GiftiDataArray(darr, intent=intent,
+        nib.gifti.GiftiDataArray(darr.astype('float32'), intent=intent,
                                  datatype='NIFTI_TYPE_FLOAT32',
                                  meta=meta)
         for darr, meta in zip(data.T, names)
