@@ -25,10 +25,15 @@ def _osfify_urls(data):
 
     OSF_API = "https://files.osf.io/v1/resources/{}/providers/osfstorage/{}"
 
-    if isinstance(data, str):
+    if isinstance(data, str) or data is None:
         return data
     elif 'url' in data:
-        data['url'] = OSF_API.format(*data['url'])
+        # if url is None then we this is a malformed entry and we should ignore
+        if data['url'] is None:
+            return
+        # if the url isn't a string assume we're supposed to format it
+        elif not isinstance(data['url'], str):
+            data['url'] = OSF_API.format(*data['url'])
 
     try:
         for key, value in data.items():
@@ -36,6 +41,8 @@ def _osfify_urls(data):
     except AttributeError:
         for n, value in enumerate(data):
             data[n] = _osfify_urls(value)
+        # drop the invalid entries
+        data = [d for d in data if d is not None]
 
     return data
 
