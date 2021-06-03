@@ -48,6 +48,8 @@ def get_dataset_info(name):
     ----------
     name : str
         Name of dataset
+    dtype : {'atlas', 'annotation'}, optional
+        What datatype `name` refers to. Default: 'atlas'
 
     Returns
     -------
