@@ -26,7 +26,6 @@ ORIGDIR = DATADIR / 'orig'
 def map_hill2010():
     """ Converts maps from Hill et al 2010 to fsLR 164k space
     """
-    outdir = DATADIR / 'fsLR' / '164k'
     deform = ATLASDIR / 'fsLR' / 'palsb12' \
         / 'tpl-palsb12_space-fsLR_den-74k_hemi-R_deform.txt'
     fmt = 'source-hill2010_desc-{desc}_space-{space}_den-{den}_hemi-R_' \
@@ -34,6 +33,8 @@ def map_hill2010():
     for desc in ('devexp', 'evoexp'):
         img = ORIGDIR / fmt.format(desc=desc, space='palsta24', den='74k')
         out = caret.apply_deform_map(img, deform)
+        outdir = DATADIR / 'hill2010' / desc / 'fsLR'
+        outdir.mkdir(exist_ok=True, parents=True)
         nib.save(images.construct_shape_gii(out),
                  outdir / fmt.format(desc=desc, space='fsLR', den='164k'))
 
@@ -41,7 +42,6 @@ def map_hill2010():
 def map_reardon2018():
     """ Converts maps from Reardon, Seidlitz et al 2018 to civet v2 space
     """
-    outdir = DATADIR / 'civet' / '41k'
     src = ATLASDIR / 'civet' / 'civet_v1' \
         / 'tpl-civetv1_den-41k_hemi-{hemi}_midthickness.surf.gii'
     trg = ATLASDIR / 'civet' \
@@ -52,6 +52,8 @@ def map_reardon2018():
         s, t = str(src).format(hemi=hemi), str(trg).format(hemi=hemi)
         img = ORIGDIR / fmt.format(desc=desc, space='civetv1', hemi=hemi)
         out = images.interp_surface(img, s, t)
+        outdir = DATADIR / 'reardon2018' / f'scaling{desc}' / 'civet'
+        outdir.mkdir(exist_ok=True, parents=True)
         nib.save(images.construct_shape_gii(out),
                  outdir / fmt.format(desc=desc, space='civet', hemi=hemi))
 
