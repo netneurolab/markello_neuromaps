@@ -49,6 +49,8 @@ def _match_annot(info, **kwargs):
     ----------
     info : list-of-dict
         Information on annotations
+    kwargs : key-value pairs
+        Values of data in `info` on which to match
 
     Returns
     -------
@@ -81,7 +83,8 @@ def _match_annot(info, **kwargs):
             elif value is not None and comp is None:
                 match = False
             elif isinstance(value, str):
-                match = match and comp == value
+                if value != 'all':
+                    match = match and comp == value
             else:
                 func = all if key == 'tags' else any
                 match = match and func(f in comp for f in value)
@@ -135,14 +138,14 @@ def available_tags():
 
 
 def fetch_annotation(*, source=None, desc=None, space=None, den=None, res=None,
-                     hemi=None, tags=None, token=None, data_dir=None,
-                     verbose=1):
+                     hemi=None, tags=None, format=None, token=None,
+                     data_dir=None, verbose=1):
     """
     Downloads files for brain annotations matching requested variables
 
     Parameters
     ----------
-    source, desc, space, den, res, hemi, tags : str or list-of-str
+    source, desc, space, den, res, hemi, tags, format : str or list-of-str
         Values on which to match annotations. If not specified annotations with
         any value for the relevant key will be matched. Default: None
     token : str, optional
@@ -166,10 +169,22 @@ def fetch_annotation(*, source=None, desc=None, space=None, den=None, res=None,
         filenames
     """
 
+    # check input parameters to ensure we're fetching _something_
+    supplied = False
+    for val in (source, desc, space, den, res, hemi, tags, format):
+        if val is not None:
+            supplied = True
+            break
+    if not supplied:
+        raise ValueError('Must provide at least one parameters on which to '
+                         'match annotations. If you want to fetch all '
+                         'annotations set any of the parameters to "all".')
+
+    # get info on datasets we need to fetch
     data_dir = get_data_dir(data_dir=data_dir)
     info = _match_annot(get_dataset_info('annotations'),
                         source=source, desc=desc, space=space, den=den,
-                        res=res, hemi=hemi, tags=tags)
+                        res=res, hemi=hemi, tags=tags, format=format)
     if verbose > 1:
         print(f'Identified {len(info)} datsets matching specified parameters')
 
