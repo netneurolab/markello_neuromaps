@@ -74,7 +74,7 @@ def _match_annot(info, **kwargs):
     out = []
     for dset in info:
         match = True
-        for key in ('source', 'desc', 'space', 'hemi', 'tags'):
+        for key in ('source', 'desc', 'space', 'hemi', 'tags', 'format'):
             comp, value = dset.get(key), kwargs.get(key)
             if value is None:
                 continue
@@ -94,13 +94,13 @@ def _match_annot(info, **kwargs):
 
 
 def available_annotations(source=None, desc=None, space=None, den=None,
-                          res=None, hemi=None, tags=None):
+                          res=None, hemi=None, tags=None, format=None):
     """
     Lists datasets available via :func:`~.fetch_annotation`
 
     Parameters
     ----------
-    source, desc, space, den, res, hemi, tags : str or list-of-str
+    source, desc, space, den, res, hemi, tags, format : str or list-of-str
         Values on which to match annotations. If not specified annotations with
         any value for the relevant key will be matched. Default: None
 
@@ -112,9 +112,26 @@ def available_annotations(source=None, desc=None, space=None, den=None,
 
     info = _match_annot(get_dataset_info('annotations'), source=source,
                         desc=desc, space=space, den=den, res=res, hemi=hemi,
-                        tags=tags)
+                        tags=tags, format=format)
 
     return list(_groupby_match([f['fname'] for f in info]).keys())
+
+
+def available_tags():
+    """
+    Returns available tags for querying annotations
+
+    Returns
+    -------
+    tags : list-of-str
+        Available tags
+    """
+
+    tags = set()
+    for dset in get_dataset_info('annotations'):
+        if dset['tags'] is not None:
+            tags.update(dset['tags'])
+    return sorted(tags)
 
 
 def fetch_annotation(*, source=None, desc=None, space=None, den=None, res=None,
