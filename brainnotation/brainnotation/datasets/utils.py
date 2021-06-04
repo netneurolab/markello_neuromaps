@@ -7,6 +7,8 @@ import json
 import os
 from pkg_resources import resource_filename
 
+import requests
+
 
 def _osfify_urls(data):
     """
@@ -101,3 +103,31 @@ def get_data_dir(data_dir=None):
         os.makedirs(data_dir)
 
     return data_dir
+
+
+def _get_session(token=None):
+    """
+    Returns requests.Session with `token` auth in header if supplied
+
+    Parameters
+    ----------
+    token : str, optional
+        OSF personal access token for accessing restricted annotations. Will
+        also check the environmental variable 'BRAINNOTATION_OSF_TOKEN' if not
+        provided; if that is not set no token will be provided and restricted
+        annotations will be inaccessible. Default: None
+
+    Returns
+    -------
+    session : requests.Session
+        Session instance with authentication in header
+    """
+
+    headers, session = {}, requests.Session()
+    if token is None:
+        token = os.environ.get('BRAINNOTATION_OSF_TOKEN', None)
+    if token is not None:
+        headers['Authorization'] = 'Bearer {}'.format(token)
+        session.headers.update(headers)
+
+    return session

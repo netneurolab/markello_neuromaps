@@ -4,42 +4,41 @@ Functions for fetching annotations (from the internet, if necessary)
 """
 
 from collections import defaultdict
-import os
+from pathlib import Path
 import re
+import shutil
 
-from nilearn.datasets.utils import _fetch_files
-import requests
+from nilearn.datasets.utils import _fetch_file
 
-from brainnotation.datasets.utils import get_data_dir, get_dataset_info
+from brainnotation.datasets.utils import (get_data_dir, get_dataset_info,
+                                          _get_session)
 
 MATCH = re.compile(
     r'source-(\S+)_desc-(\S+)_space-(\S+)_(?:den|res)-(\d+[k|m]{1,2})_'
 )
 
 
-def available_annotations(source=None, desc=None, space=None, den=None,
-                          res=None, hemi=None, tags=None):
-    """
-    Lists datasets available via :func:`~.fetch_annotation`
+def _groupby_match(fnames):
+    """"
+    Groups files in `fnames` by (source, desc, space, res/den)
 
     Parameters
     ----------
-    source, desc, space, den, res, hemi, tags : str or list-of-str
-        Values on which to match annotations. If not specified annotations with
-        any value for the relevant key will be matched. Default: None
+    fnames : list-of-str
+        Filenames to be grouped
 
     Returns
     -------
-    datasets : list-of-str or dict
-        List of available annotations. If `return_description` is True, a dict
-        is returned instead where keys are available annotations and values are
-        brief descriptions of the annotation.
+    groups : dict-of-str
+        Where keys are tuple (source, desc, space, res/den) and values are
+        lists of filenames
     """
 
-    info = get_dataset_info('annotations')
+    out = defaultdict(list)
+    for fn in fnames:
+        out[MATCH.search(fn).groups()].append(fn)
 
-    return _match_annot(info, source=source, desc=desc, space=space, den=den,
-                        res=res, hemi=hemi, tags=tags)
+    return {k: v for k, v in out.items()}
 
 
 def _match_annot(info, **kwargs):
@@ -74,7 +73,7 @@ def _match_annot(info, **kwargs):
 
     out = []
     for dset in info:
-        match = (dset.get('den') or dset.get('res')) in denres
+        match = True
         for key in ('source', 'desc', 'space', 'hemi', 'tags'):
             comp, value = dset.get(key), kwargs.get(key)
             if value is None:
@@ -86,10 +85,36 @@ def _match_annot(info, **kwargs):
             else:
                 func = all if key == 'tags' else any
                 match = match and func(f in comp for f in value)
+        if len(denres) > 0:
+            match = match and (dset.get('den') or dset.get('res')) in denres
         if match:
             out.append(dset)
 
     return out
+
+
+def available_annotations(source=None, desc=None, space=None, den=None,
+                          res=None, hemi=None, tags=None):
+    """
+    Lists datasets available via :func:`~.fetch_annotation`
+
+    Parameters
+    ----------
+    source, desc, space, den, res, hemi, tags : str or list-of-str
+        Values on which to match annotations. If not specified annotations with
+        any value for the relevant key will be matched. Default: None
+
+    Returns
+    -------
+    datasets : list-of-str
+        List of available annotations
+    """
+
+    info = _match_annot(get_dataset_info('annotations'), source=source,
+                        desc=desc, space=space, den=den, res=res, hemi=hemi,
+                        tags=tags)
+
+    return list(_groupby_match([f['fname'] for f in info]).keys())
 
 
 def fetch_annotation(*, source=None, desc=None, space=None, den=None, res=None,
@@ -128,28 +153,22 @@ def fetch_annotation(*, source=None, desc=None, space=None, den=None, res=None,
     info = _match_annot(get_dataset_info('annotations'),
                         source=source, desc=desc, space=space, den=den,
                         res=res, hemi=hemi, tags=tags)
-    if verbose:
+    if verbose > 1:
         print(f'Identified {len(info)} datsets matching specified parameters')
 
-    # get and add token to headers if present
-    headers, session = {}, None
-    if token is None:
-        token = os.environ.get('BRAINNOTATION_OSF_TOKEN', None)
-    if token is not None:
-        headers['Authorization'] = 'Bearer {}'.format(token)
-        session = requests.Session()
-        session.headers.update(headers)
+    # get session for requests
+    session = _get_session(token=token)
 
-    filenames = [
-        (os.path.join('annotations', dset['fname']),
-         dset['url'],
-         {'md5sum': dset['checksum']}) for dset in info
-    ]
-    data = _fetch_files(data_dir, files=filenames, verbose=verbose,
-                        session=session)
+    # FIXME: current work-around to handle that _fetch_files() does not support
+    # session instances. hopefully a future version will and we can just use
+    # that function to handle this instead of calling _fetch_file() directly
+    data = []
+    for dset in info:
+        fn = Path(data_dir) / 'annotations' / dset['rel_path'] / dset['fname']
+        if not fn.exists():
+            dl_file = _fetch_file(dset['url'], str(fn.parent), verbose=verbose,
+                                  md5sum=dset['checksum'], session=session)
+            shutil.move(dl_file, fn)
+        data.append(str(fn))
 
-    out = defaultdict(list)
-    for fn in data:
-        out[MATCH.search(fn).groups()].append(fn)
-
-    return {k: v for k, v in out.items()}
+    return _groupby_match(data)
