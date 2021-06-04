@@ -191,7 +191,7 @@ def fetch_annotation(*, source=None, desc=None, space=None, den=None, res=None,
     # get session for requests
     session = _get_session(token=token)
 
-    # FIXME: current work-around to handle that _fetch_files() does not support
+    # TODO: current work-around to handle that _fetch_files() does not support
     # session instances. hopefully a future version will and we can just use
     # that function to handle this instead of calling _fetch_file() directly
     data = []
