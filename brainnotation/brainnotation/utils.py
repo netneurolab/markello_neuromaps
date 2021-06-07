@@ -30,7 +30,7 @@ def tmpname(suffix, prefix=None, directory=None):
     return Path(fn)
 
 
-def run(cmd, env=None, return_proc=False, quiet=False):
+def run(cmd, env=None, return_proc=False, quiet=False, **kwargs):
     """
     Runs `cmd` via shell subprocess with provided environment `env`
 
@@ -73,12 +73,18 @@ def run(cmd, env=None, return_proc=False, quiet=False):
                             .format(type(env)))
         merged_env.update(env)
 
-    opts = {}
+    opts = dict(check=True, shell=True, universal_newlines=True)
+    opts.update(**kwargs)
     if quiet:
-        opts = dict(stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        opts.update(dict(stdout=subprocess.PIPE, stderr=subprocess.PIPE))
 
-    proc = subprocess.run(cmd, env=merged_env, shell=True, check=True,
-                          universal_newlines=True, **opts)
+    try:
+        proc = subprocess.run(cmd, env=merged_env, **opts)
+    except subprocess.CalledProcessError as err:
+        raise subprocess.SubprocessError(
+            f'Command failed with non-zero exit status {err.returncode}. '
+            f'Error traceback: "{err.stderr.strip()}"'
+        )
 
     if return_proc:
         return proc
