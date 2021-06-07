@@ -101,7 +101,7 @@ def _vol_to_surf(img, space, density, method='linear'):
     return out
 
 
-def mni_to_civet(img, civet_density='41k', method='linear'):
+def mni152_to_civet(img, civet_density='41k', method='linear'):
     """
     Projects `img` in MNI152 space to CIVET surface
 
@@ -128,7 +128,7 @@ def mni_to_civet(img, civet_density='41k', method='linear'):
     return _vol_to_surf(img, 'civet', civet_density, method)
 
 
-def mni_to_fsaverage(img, fsavg_density='41k', method='linear'):
+def mni152_to_fsaverage(img, fsavg_density='41k', method='linear'):
     """
     Projects `img` in MNI152 space to fsaverage surface
 
@@ -151,7 +151,7 @@ def mni_to_fsaverage(img, fsavg_density='41k', method='linear'):
     return _vol_to_surf(img, 'fsaverage', fsavg_density, method)
 
 
-def mni_to_fslr(img, fslr_density='32k', method='linear'):
+def mni152_to_fslr(img, fslr_density='32k', method='linear'):
     """
     Projects `img` in MNI152 space to fsLR surface
 
