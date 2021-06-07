@@ -4,8 +4,7 @@ from joblib import Parallel, delayed
 import numpy as np
 from scipy import ndimage, sparse
 
-from brainnotation.images import load_gifti
-from brainnotation.nulls.utils import relabel_gifti, PARCIGNORE
+from brainnotation.images import load_gifti, relabel_gifti, PARCIGNORE
 
 
 def point_in_triangle(point, triangle, return_pdist=True):

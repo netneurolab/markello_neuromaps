@@ -11,6 +11,11 @@ from nibabel.filebasedimages import ImageFileError
 import numpy as np
 from scipy.interpolate import griddata
 
+PARCIGNORE = [
+    'unknown', 'corpuscallosum', 'Background+FreeSurfer_Defined_Medial_Wall',
+    '???'
+]
+
 
 def construct_surf_gii(vert, tri):
     """
@@ -310,3 +315,95 @@ def average_surfaces(*surfs):
     vertices /= n_surfs
 
     return construct_surf_gii(vertices, triangles)
+
+
+def _relabel(labels, minval=0, bgval=None):
+    """
+    Relabels `labels` so that they're consecutive
+
+    Parameters
+    ----------
+    labels : (N,) array_like
+        Labels to be re-labelled
+    minval : int, optional
+        What the new minimum value of the labels should be. Default: 0
+    bgval : int, optional
+        What the background value should be; the new labels will start at
+        `minval` but the first value of these labels (i.e., labels == `minval`)
+        will be set to `bgval`. Default: None
+
+    Returns
+    ------
+    labels : (N,) np.ndarray
+        New labels
+    """
+
+    labels = np.unique(labels, return_inverse=True)[-1] + minval
+    if bgval is not None:
+        labels[labels == minval] = bgval
+    return labels
+
+
+def relabel_gifti(parcellation, background=PARCIGNORE, offset=None):
+    """
+    Updates GIFTI images so label IDs are consecutive across hemispheres
+
+    Parameters
+    ----------
+    parcellation : (2,) tuple-of-str
+        Surface label files in GIFTI format (lh.label.gii, rh.label.gii)
+    background : list-of-str, optional
+        If provided, a list of IDs in `atlas` that should be set to 0 (the
+        presumptive background value). Other IDs will be shifted so they are
+        consecutive (i.e., 0--N). Default: `PARCIGNORE`
+    offset : int, optional
+        What the lowest value in `atlas[1]` should be not including background
+        value. If not specified it will be purely consecutive from `atlas[0]`.
+        Default: None
+
+    Returns
+    -------
+    relabelled : (2,) tuple-of-nib.gifti.GiftiImage
+        Re-labelled `atlas` files
+    """
+
+    relabelled = tuple()
+    minval = 0
+    if not isinstance(parcellation, tuple):
+        parcellation = (parcellation,)
+
+    for hemi in parcellation:
+        # get necessary info from file
+        img = load_gifti(hemi)
+        data = img.agg_data()
+        labels = img.labeltable.labels
+        lt = {v: k for k, v in img.labeltable.get_labels_as_dict().items()}
+
+        # get rid of labels we want to drop
+        if background is not None:
+            for val in background:
+                idx = lt.get(val, 0)
+                if idx == 0:
+                    continue
+                data[data == idx] = 0
+                labels = [f for f in labels if f.key != idx]
+
+        # reset labels so they're consecutive and update label keys
+        data = _relabel(data, minval=minval, bgval=0)
+        ids = np.unique(data)
+        new_labels = []
+        for n, i in enumerate(ids):
+            lab = labels[n]
+            lab.key = i
+            new_labels.append(lab)
+        minval = len(ids) - 1 if offset is None else int(offset) - 1
+
+        # make new gifti image with updated information
+        darr = nib.gifti.GiftiDataArray(data, intent='NIFTI_INTENT_LABEL',
+                                        datatype='NIFTI_TYPE_INT32')
+        labeltable = nib.gifti.GiftiLabelTable()
+        labeltable.labels = new_labels
+        img = nib.GiftiImage(darrays=[darr], labeltable=labeltable)
+        relabelled += (img,)
+
+    return relabelled

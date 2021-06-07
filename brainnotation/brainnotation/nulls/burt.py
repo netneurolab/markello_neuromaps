@@ -157,7 +157,8 @@ def batch_surrogates(x, y, rho=None, d0=None, seed=None, n_surr=1000,
         from joblib import Parallel, delayed
         joblib_avail = True
     except ImportError:
-        warnings.warn('joblib not available; cannot parallelize computations')
+        if n_jobs != 1:
+            warnings.warn('joblib not available; cannot parallelize')
         joblib_avail = False
 
     def _quick_surr(iw, ysort, seed=None):
