@@ -20,12 +20,14 @@ _resampling_docs = dict(
     Input data to be resampled to each other
 {src,trg}_space : str
     Template space of {`src`, `trg`} data\
-hemi : {'L', 'R'}, optional
-    If `src` and `trg` are not tuples this specifies the hemisphere the data
-    represent. Default: None
 method : {'nearest', 'linear'}, optional
     Method for resampling. Specify 'nearest' if `data` are label images.
     Default: 'linear'\
+""",
+    hemi="""\
+hemi : {'L', 'R'}, optional
+    If `src` and `trg` are not tuples this specifies the hemisphere the data
+    represent. Default: None\
 """,
     resample_out="""\
 src, trg : tuple-of-nib.GiftiImage
@@ -144,8 +146,8 @@ def _estimate_density(data, hemi=None):
     return densities
 
 
-def downsample_only(src, trg, src_space, trg_space, hemi=None,
-                    method='linear'):
+def downsample_only(src, trg, src_space, trg_space, method='linear',
+                    hemi=None):
     src_den, trg_den = _estimate_density((src, trg), hemi)
     src_num, trg_num = int(src_den[:-1]), int(trg_den[:-1])
     src_space, trg_space = src_space.lower(), trg_space.lower()
@@ -169,6 +171,7 @@ If density of `src` is greater than `trg` then `src` is resampled to
 Parameters
 ----------
 {resample_in}
+{hemi}
 
 Returns
 -------
@@ -176,8 +179,8 @@ Returns
 """.format(**_resampling_docs)
 
 
-def transform_to_src(src, trg, src_space, trg_space, hemi=None,
-                     method='linear'):
+def transform_to_src(src, trg, src_space, trg_space, method='linear',
+                     hemi=None):
     src_den, trg_den = _estimate_density((src, trg), hemi)
 
     func = getattr(transforms, f'{trg_space.lower()}_to_{src_space.lower()}')
@@ -192,6 +195,7 @@ Resamples `trg` to match space and density of `src`
 Parameters
 ----------
 {resample_in}
+{hemi}
 
 Returns
 -------
@@ -222,9 +226,8 @@ Returns
 """.format(**_resampling_docs)
 
 
-def transform_to_alt(src, trg, src_space, trg_space, hemi=None,
-                     method='linear', alt_space='fsaverage',
-                     alt_density='41k'):
+def transform_to_alt(src, trg, src_space, trg_space, method='linear',
+                     hemi=None, alt_space='fsaverage', alt_density='41k'):
     src_den, trg_den = _estimate_density((src, trg), hemi)
 
     func = getattr(transforms, f'{src_space.lower()}_to_{alt_space.lower()}')
@@ -242,6 +245,13 @@ Resamples `src` and `trg` to `alt_space` and `alt_density`
 Parameters
 ----------
 {resample_in}
+{hemi}
+alt_space : {'fsaverage', 'fsLR', 'civet'}, optional
+    Alternative space to which `src` and `trg` should be transformed. Default:
+    'fsaverage'
+alt_density : str, optional
+    Resolution to which `src` and `trg` should be resampled. Must be valid
+    with `alt_space`. Default: '41k'
 
 Returns
 -------
@@ -249,7 +259,7 @@ Returns
 """.format(**_resampling_docs)
 
 
-def mni_transformation(src, trg, src_space, trg_space):
+def mni_transformation(src, trg, src_space, trg_space, method='linear'):
     if src_space != 'MNI152':
         raise ValueError('Cannot perform MNI transformation when src_space is '
                          f'not "MNI152." Received: {src_space}.')
@@ -257,8 +267,21 @@ def mni_transformation(src, trg, src_space, trg_space):
     if trg_space != 'MNI152':
         trg_den, = _estimate_density((trg_den,), None)
     func = getattr(transforms, f'mni152_to_{trg_space.lower()}')
-    src = func(src, trg_den)
+    src = func(src, trg_den, method=method)
     return src, trg
+
+
+mni_transformation.__doc__ = """\
+Resamples `src` in MNI152 to `trg` space
+
+Parameters
+----------
+{resample_in}
+
+Returns
+-------
+{resample_out}
+""".format(**_resampling_docs)
 
 
 def _check_altspec(spec):
@@ -293,10 +316,9 @@ def _check_altspec(spec):
     return (ALIAS.get(spec[0], spec[0]), spec[1])
 
 
-def correlate_images(src, trg, src_space, trg_space, hemi=None,
-                     method='linear', resampling='downsample_only',
-                     corrtype='pearson', ignore_zero=True,
-                     alt_spec=None):
+def correlate_images(src, trg, src_space, trg_space, method='linear',
+                     hemi=None, resampling='downsample_only',
+                     corrtype='pearson', ignore_zero=True, alt_spec=None):
 
     resamplings = ('downsample_only', 'transform_to_src', 'transform_to_trg',
                    'transform_to_alt')
@@ -306,6 +328,7 @@ def correlate_images(src, trg, src_space, trg_space, hemi=None,
     src_space = ALIAS.get(src_space, src_space)
     trg_space = ALIAS.get(trg_space, trg_space)
 
+    # all this input handling just to deal with volumetric images :face_palm:
     opts, err = {}, None
     if resampling == 'transform_to_alt':
         opts['alt_space'], opts['alt_density'] = _check_altspec(alt_spec)
@@ -325,9 +348,9 @@ def correlate_images(src, trg, src_space, trg_space, hemi=None,
         raise ValueError(err)
 
     if src_space == 'MNI152':
-        src, trg = mni_transformation(src, trg, src_space, trg_space)
+        src, trg = mni_transformation(src, trg, src_space, trg_space, method)
     elif trg_space == 'MNI152':
-        trg, src = mni_transformation(trg, src, trg_space, src_space)
+        trg, src = mni_transformation(trg, src, trg_space, src_space, method)
     else:
         func = globals()[resampling]
         src, trg = func(src, trg, src_space, trg_space, hemi=hemi,
@@ -343,6 +366,7 @@ Correlates images `src` and `trg`, resampling as needed
 Parameters
 ----------
 {resample_in}
+{hemi}
 resampling : str, optional
     Name of resampling function to resample `src` and `trg`. Must be one of:
     {'downsample_only', 'transform_to_src', 'transform_to_trg',
@@ -360,10 +384,29 @@ Returns
 -------
 correlation : float
     Correlation between `src` and `trg`. If multiple hemispheres are
-    provided then correlation is calculated between concatenated data
+    provided then correlation is calculated between data concatenated across
+    hemispheres
 
 Notes
 -----
 The four available `resampling` strategies will control how `src` and/or `trg`
-are resampled prior to correlation.
-"""
+are resampled prior to correlation. Options include:
+
+1. `resampling='downsample_only'`
+
+    Data from `src` and `trg` are resampled to the lower resolution of the two
+    input datasets
+
+2. `resampling='transform_to_src'`
+
+    Data from `trg` are always resampled to match `src` space and resolution
+
+3. `resampling='transform_to_trg'`
+
+    Data from `src` are always resampled to match `trg` space and resolution
+
+4. `resampling='transform_to_alt'`
+
+    Data from `trg` and `src` are resampled to the space and resolution
+    specified by `alt_spec` (space, density)
+""".format(**_resampling_docs)
