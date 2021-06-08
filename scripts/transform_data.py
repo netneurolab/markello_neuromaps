@@ -1,41 +1,35 @@
 #!/usr/bin/env python
 
 import itertools
+import os
 from pathlib import Path
 import re
+from typing import Iterable
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns  # noqa
 
-from brainnotation import plotting, transforms
-from brainnotation.images import load_gifti
+from brainnotation import datasets, plotting, resampling, stats, transforms
+from brainnotation.datasets.annotations import MATCH
 
 plt.rcParams['svg.fonttype'] = 'none'
 plt.rcParams['font.sans-serif'] = ['Myriad Pro']
 plt.rcParams['font.size'] = 20.0
 
-ATLASDIR = Path('./data/raw/brain_maps')
 FIGDIR = Path('./figures/transformed')
 OUTDIR = Path('./data/derivatives/correlations')
-MATCH = re.compile(r'_space-(\S+)_den-(\d+k)_hemi-(\S+)_')
 IMAGES = [
-   ATLASDIR / 'fsLR' / '164k' / 'source-hill2010_desc-evoexp_space-fsLR_den-164k_hemi-R_feature.func.gii',  # noqa
-   ATLASDIR / 'fsLR' / '164k' / 'source-hill2010_desc-devexp_space-fsLR_den-164k_hemi-R_feature.func.gii',  # noqa
-   ATLASDIR / 'fsLR' / '164k' / 'source-mueller2013_desc-intersubjvar_space-fsLR_den-164k_hemi-L_feature.func.gii',  # noqa
-   ATLASDIR / 'fsLR' / '164k' / 'source-raichle_desc-cmruglu_space-fsLR_den-164k_hemi-L_feature.func.gii',  # noqa
-   ATLASDIR / 'fsLR' / '32k' / 'source-hcps1200_desc-myelinmap_space-fsLR_den-32k_hemi-L_feature.func.gii',  # noqa
-   ATLASDIR / 'fsLR' / '32k' / 'source-margulies2016_desc-fcgradient01_space-fsLR_den-32k_hemi-L_feature.func.gii',  # noqa
-   ATLASDIR / 'civet' / '41k' / 'source-reardon2018_desc-scalingpnc_space-civet_den-41k_hemi-L_feature.func.gii',  # noqa
-   ATLASDIR / 'fsaverage' / '10k' / 'source-abagen_desc-genepc1_space-fsaverage_den-10k_hemi-L_feature.func.gii',  # noqa
-   ATLASDIR / 'fsLR' / '4k' / 'source-hcps1200_desc-megalpha_space-fsLR_den-4k_hemi-L_feature.func.gii'  # noqa
+    ('hill2010', 'evoexp', 'fsLR', '164k'),
+    ('hill2010', 'devexp', 'fsLR', '164k'),
+    ('mueller2013', 'intersubjvar', 'fsLR', '164k'),
+    ('raichle', 'cmruglu', 'fsLR', '164k'),
+    ('hcps1200', 'myelinmap', 'fsLR', '32k'),
+    ('margulies2016', 'fcgradient01', 'fsLR', '32k'),
+    ('reardon2018', 'scalingpnc', 'civet', '41k'),
+    ('abagen', 'genepc1', 'fsaverage', '10k'),
+    ('hcps1200', 'megalpha', 'fsLR', '4k')
 ]
-MAPPING = dict(
-    fsLR=transforms.fslr_to_fslr,
-    civet=transforms.civet_to_fslr,
-    fsaverage=transforms.fsaverage_to_fslr
-)
-
 PARAMS = [
     dict(cmap='caret_blueorange', vmin=-2.7, vmax=2.7),
     dict(cmap='caret_blueorange', vmax=0.5),
@@ -47,85 +41,108 @@ PARAMS = [
     dict(cmap='rocket', vmax=2),
     dict(cmap='RdBu_r', vmin=0.15)
 ]
+HEMI = re.compile('hemi-(L|R)')
 
 
-def imgcorr(src, trg):
-    srcdata = np.nan_to_num(load_gifti(src).agg_data())
-    trgdata = np.nan_to_num(load_gifti(trg).agg_data())
-    mask = np.logical_and(np.isclose(srcdata, 0), np.isclose(trgdata, 0))
-    return np.corrcoef(srcdata[~mask], trgdata[~mask])[0, 1]
+def correlate_images(images, resamp):
+    """
+    Resamples and correlates all pairs of datasets in `images`
 
+    Parameters
+    ----------
+    images : (N,) list-of-tuple of str or os.PathLike
+        Datasets to be resampled + correlation
+    resamp : str
+        Method to resample pairs of datasets
 
-def downsample_only(src, trg):
-    srcspace, srcden, srchemi = MATCH.search(str(src)).groups()
-    trgspace, trgden, trghemi = MATCH.search(str(trg)).groups()
-    srcnum, trgnum = int(srcden[:-1]), int(trgden[:-1])
-    # resample to `trg`
-    if int(srcden[:-1]) >= int(trgden[:-1]):
-        # if images are not same resolution or same space, transform
-        # otherwise, they're identical res + space so we're good to go
-        if srcspace != trgspace or srcnum != trgnum:
-            func = getattr(transforms,
-                           f'{srcspace.lower()}_to_{trgspace.lower()}')
-            src, = func(src, srcden, trgden, hemi=srchemi)
-    # resample to `src`
-    elif int(srcden[:-1]) < int(trgden[:-1]):
-        func = getattr(transforms, f'{trgspace.lower()}_to_{srcspace.lower()}')
-        trg, = func(trg, trgden, srcden, hemi=trghemi)
+    Returns
+    -------
+    corrs : (N * (N - 1) / 2,) np.ndarray
+        Correlations between pairs of `images`
+    """
 
-    return imgcorr(src, trg)
+    images = images.copy()
+    for i, img in enumerate(images):
+        source, desc, space, den = img
+        images[i] = datasets.fetch_annotation(source=source, desc=desc,
+                                              space=space, den=den)[img]
 
-
-def transform_to_src(src, trg):
-    srcspace, srcden, _ = MATCH.search(str(src)).groups()
-    trgspace, trgden, trghemi = MATCH.search(str(trg)).groups()
-    func = getattr(transforms, f'{trgspace.lower()}_to_{srcspace.lower()}')
-    trg, = func(trg, trgden, srcden, hemi=trghemi)
-
-    return imgcorr(src, trg)
-
-
-def transform_to_trg(src, trg):
-    srcspace, srcden, srchemi = MATCH.search(str(src)).groups()
-    trgspace, trgden, _ = MATCH.search(str(trg)).groups()
-    func = getattr(transforms, f'{srcspace.lower()}_to_{trgspace.lower()}')
-    src, = func(src, srcden, trgden, hemi=srchemi)
-
-    return imgcorr(src, trg)
-
-
-def transform_to_alt(src, trg, space='fsaverage', den='41k'):
-    srcspace, srcden, srchemi = MATCH.search(str(src)).groups()
-    trgspace, trgden, trghemi = MATCH.search(str(trg)).groups()
-    func = getattr(transforms, f'{srcspace.lower()}_to_{space.lower()}')
-    src, = func(src, srcden, den, hemi=srchemi)
-    func = getattr(transforms, f'{trgspace.lower()}_to_{space.lower()}')
-    trg, = func(trg, trgden, den, hemi=trghemi)
-
-    return imgcorr(src, trg)
-
-
-def correlate_images(images, func):
     n, n_images = 0, len(images)
     corrs = np.zeros(int((n_images * (n_images - 1) / 2)))
     for im1, im2 in itertools.combinations(images, 2):
-        corrs[n] = func(im1, im2)
+        src_space = MATCH.search(str(im1[0])).group(3)
+        trg_space = MATCH.search(str(im2[0])).group(3)
+
+        # handle single-hemisphere data (rather inelegantly...)
+        hemi = None
+        if len(im1) == 1 and len(im2) != 1:
+            hemi = HEMI.search(str(im1[0])).group(1)
+            im2 = tuple(
+                i for i in im2 if re.search(f'hemi-{hemi}', i) is not None
+            )
+        elif len(im1) != 1 and len(im2) == 1:
+            hemi = HEMI.search(str(im2[0])).group(1)
+            im1 = tuple(
+                i for i in im1 if re.search(f'hemi-{hemi}', i) is not None
+            )
+        elif len(im1) == 1 and len(im2) == 1:
+            if HEMI.search(im1[0]).group(1) != HEMI.search(im2[0]).group(1):
+                corrs[n] = np.nan
+                continue
+
+        # resample and correlate images
+        im1, im2 = resampling.resample_images(im1, im2, src_space, trg_space,
+                                              hemi=hemi, resampling=resamp)
+        corrs[n] = stats.correlate_images(im1, im2)
         n += 1
 
     return corrs
 
 
-def implot(image, **kwargs):
-    space, density, hemi = MATCH.search(str(image)).groups()
-    if space != 'fsLR' or density != '32k':
-        out = MAPPING[space](image, density, hemi=hemi)
-    else:
-        out = image
-    fig = plotting.plot_surf_template(out, 'fslr', '32k', hemi=hemi,
-                                      surf='veryinflated', **kwargs)
-    fig.savefig(FIGDIR / f'{str(image.name)[:-9]}.png',
-                dpi=300, transparent=True, bbox_inches='tight')
+def resample_and_plot(image, trg_space='fsLR', trg_density='32k', **kwargs):
+    """
+    Resamples `image` to `trg_space` / `trg_density` and plots / saves figure
+
+    Parameters
+    ----------
+    image : str or os.PathLike
+        Filepath to single hemisphere image
+    trg_space : str, optional
+        Target space to resample `image` to. Default: 'fsLR'
+    trg_density : str, optional
+        Target density to resample `image` to. Default: '32k'
+    kwargs : key-value pairs
+        Plotting parameters passed directly to `plotting.plot_surf_template`
+
+    Returns
+    -------
+    fn : str
+        Filepath to save plot figure
+    """
+
+    if (isinstance(image, (str, os.PathLike))
+            or not isinstance(image, Iterable)):
+        image = (image,)
+
+    # if only one annotation provided get the relevant hemisphere
+    hemi = None
+    if len(image) == 1:
+        hemi = re.search('hemi-(L|R)', str(image[0])).group(1)
+
+    # no need to resample if we're already trg_space / trg_density
+    resampled = image
+    space, density = MATCH.search(str(image[0])).groups()[2:]
+    if space != trg_space or density != trg_density:
+        func = getattr(transforms, f'{space.lower()}_to_{trg_space.lower()}')
+        resampled = func(image, density, hemi=hemi)
+
+    fig = plotting.plot_surf_template(resampled, trg_space, trg_density,
+                                      hemi=hemi, surf='veryinflated', **kwargs)
+    fn = FIGDIR / f'{str(image[0].name)[:-9]}.png'
+    fig.savefig(fn, dpi=300, transparent=True, bbox_inches='tight')
     plt.close(fig=fig)
+
+    return fn
 
 
 def main():
@@ -133,21 +150,23 @@ def main():
         fd.mkdir(exist_ok=True, parents=True)
 
     for n, image in enumerate(IMAGES):
-        print(image)
-        implot(image, **PARAMS[n])
+        source, desc, space, den = image
+        image = datasets.fetch_annotation(source=source, desc=desc,
+                                          space=space, den=den)[image]
+        resample_and_plot(image, **PARAMS[n])
 
     allcorrs = []
-    funcs = [
-        transform_to_src, transform_to_trg, transform_to_alt, downsample_only
-    ]
+    funcs = (
+        'transform_to_src', 'transform_to_trg', 'transform_to_alt',
+        'downsample_only'
+    )
     for func in funcs:
-        print(func.__name__)
-        corrs = correlate_images(IMAGES[2:], func)
-        np.savetxt(OUTDIR / f'corrs_{func.__name__}.txt', corrs)
+        corrs = correlate_images(IMAGES, func)
+        np.savetxt(OUTDIR / f'corrs_{func}.txt', corrs)
         allcorrs.append(corrs)
 
     allcorrs = np.column_stack(allcorrs)
-    labels = [f.__name__.replace('_', ' ') for f in funcs]
+    labels = [f.replace('_', ' ') for f in funcs]
     ax = sns.heatmap(allcorrs[allcorrs.mean(1).argsort()[::-1]],
                      xticklabels=labels, yticklabels=[],
                      vmin=-0.5, vmax=0.75, center=0, cmap='RdBu_r',
