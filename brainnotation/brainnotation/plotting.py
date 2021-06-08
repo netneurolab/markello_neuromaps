@@ -69,7 +69,7 @@ def plot_surf_template(data, template, density, surf='inflated', space=None,
     axes = (axes,) if n_surf == 1 else axes.T
     for row, hemi, img in zip(axes, hemispheres, data):
         geom = load_gifti(getattr(surf, hemi)).agg_data()
-        img = load_gifti(img).agg_data()
+        img = load_gifti(img).agg_data().astype('float32')
         # set medial wall to NaN; this will avoid it being plotted
         med = load_gifti(getattr(medial, hemi)).agg_data().astype(bool)
         img[np.logical_not(med)] = np.nan
