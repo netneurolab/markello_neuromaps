@@ -119,9 +119,9 @@ Returns
 References
 ----------
 .. [SN1] Alexander-Bloch, A., Shou, H., Liu, S., Satterthwaite, T. D.,
-    Glahn, D. C., Shinohara, R. T., Vandekar, S. N., & Raznahan, A. (2018).
-    On testing for spatial correspondence between maps of human brain
-    structure and function. NeuroImage, 178, 540-51.
+   Glahn, D. C., Shinohara, R. T., Vandekar, S. N., & Raznahan, A. (2018).
+   On testing for spatial correspondence between maps of human brain
+   structure and function. NeuroImage, 178, 540-51.
 """.format(**_nulls_input_docs)
 
 
@@ -162,9 +162,9 @@ Returns
 References
 ----------
 .. [SN2] Váša, F., Seidlitz, J., Romero-Garcia, R., Whitaker, K. J.,
-    Rosenthal, G., Vértes, P. E., ... & Jones, P. B. (2018). Adolescent
-    tuning of association cortex in human structural brain networks.
-    Cerebral Cortex, 28(1), 281-294.
+   Rosenthal, G., Vértes, P. E., ... & Jones, P. B. (2018). Adolescent
+   tuning of association cortex in human structural brain networks.
+   Cerebral Cortex, 28(1), 281-294.
 """.format(**_nulls_input_docs)
 
 
