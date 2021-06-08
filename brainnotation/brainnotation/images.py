@@ -407,3 +407,86 @@ def relabel_gifti(parcellation, background=PARCIGNORE, offset=None):
         relabelled += (img,)
 
     return relabelled
+
+
+def annot_to_gifti(parcellation):
+    """
+    Converts FreeSurfer-style annotation `parcellation` files to GIFTI images
+
+    Parameters
+    ----------
+    parcellation : tuple of str or os.PathLike
+        Paths to surface annotation files (.annot)
+
+    Returns
+    -------
+    gifti : tuple-of-nib.GiftiImage
+        Converted GIFTI images
+    """
+
+    if not isinstance(parcellation, tuple):
+        parcellation = (parcellation,)
+
+    gifti = tuple()
+    for atlas in parcellation:
+        labels, ctab, names = nib.freesurfer.read_annot(atlas)
+
+        darr = nib.gifti.GiftiDataArray(labels, intent='NIFTI_INTENT_LABEL',
+                                        datatype='NIFTI_TYPE_INT32')
+        labeltable = nib.gifti.GiftiLabelTable()
+        for key, label in enumerate(names):
+            (r, g, b), a = (ctab[key, :3] / 255), (1.0 if key != 0 else 0.0)
+            glabel = nib.gifti.GiftiLabel(key, r, g, b, a)
+            glabel.label = label.decode()
+            labeltable.labels.append(glabel)
+
+        gifti += (nib.GiftiImage(darrays=[darr], labeltable=labeltable),)
+
+    return gifti
+
+
+def dlabel_to_gifti(parcellation):
+    """
+    Converts CIFTI dlabel file to GIFTI images
+
+    Parameters
+    ----------
+    parcellation : str or os.PathLike
+        Path to CIFTI parcellation file (.dlabel.nii)
+
+    Returns
+    -------
+    gifti : tuple-of-nib.GiftiImage
+        Converted GIFTI images
+    """
+
+    structures = ('CORTEX_LEFT', 'CORTEX_RIGHT')
+
+    dlabel = nib.load(parcellation)
+    parcdata = np.asarray(dlabel.get_fdata(), dtype='int32').squeeze()
+
+    gifti = tuple()
+    label_dict = dlabel.header.get_axis(index=0).label[0]
+    for bm in dlabel.header.get_index_map(1).brain_models:
+        structure = bm.brain_structure
+        if structure.startswith('CIFTI_STRUCTURE_'):
+            structure = structure[16:]
+        if structure not in structures:
+            continue
+        labels = np.zeros(bm.surface_number_of_vertices, dtype='int32')
+        idx = np.asarray(bm.vertex_indices)
+        slicer = slice(bm.index_offset, bm.index_offset + bm.index_count)
+        labels[idx] = parcdata[slicer]
+
+        darr = nib.gifti.GiftiDataArray(labels, intent='NIFTI_INTENT_LABEL',
+                                        datatype='NIFTI_TYPE_INT32')
+        labeltable = nib.gifti.GiftiLabelTable()
+        for key, (label, (r, g, b, a)) in label_dict.items():
+            if key not in labels:
+                continue
+            glabel = nib.gifti.GiftiLabel(key, r, g, b, a)
+            glabel.label = label
+            labeltable.labels.append(glabel)
+        gifti += (nib.GiftiImage(darrays=[darr], labeltable=labeltable),)
+
+    return gifti
