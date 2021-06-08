@@ -7,11 +7,12 @@ import os
 from pathlib import Path
 
 import nibabel as nib
+from nilearn import image as nimage
 import numpy as np
 from scipy.interpolate import interpn
 
-from brainnotation.datasets import (DENSITIES, fetch_atlas, fetch_regfusion,
-                                    get_atlas_dir)
+from brainnotation.datasets import (ALIAS, DENSITIES, fetch_atlas,
+                                    fetch_regfusion, get_atlas_dir)
 from brainnotation.images import construct_shape_gii, load_gifti
 from brainnotation.utils import tmpname, run
 
@@ -83,6 +84,7 @@ def _vol_to_surf(img, space, density, method='linear'):
         Left [0] and right [1] hemisphere projected `image` data
     """
 
+    space = ALIAS.get(space, space)
     if space not in DENSITIES:
         raise ValueError(f'Invalid space argument: {space}')
     if density not in DENSITIES[space]:
@@ -176,6 +178,42 @@ def mni152_to_fslr(img, fslr_density='32k', method='linear'):
                                   f'fsLR {fslr_density} space yet.')
 
     return _vol_to_surf(img, 'fsLR', fslr_density, method)
+
+
+def mni152_to_mni152(img, target=None, resolution='1mm', method='linear'):
+    """
+    Resamples `img` to `target` image (if supplied) or target `resolution`
+
+    Parameters
+    ----------
+    img : str or os.PathLike or niimg_like
+        Image in MNI152 space to be resampled
+    target : str or os.PathLike or niimg_like
+        Image in MNI152 space to which `img` should be resampled. If not
+        specified `resolution` is used instead. Default: None
+    resolution : {'1mm', '2mm', '3mm'}, optional
+        Desired resolution of output resampled image. Ignored if `target` is
+        specified. Default: '1mm'
+    method : {'nearest', 'linear'}, optional
+        Method for resampling. Specify 'nearest' if `img` is a label image.
+        Default: 'linear'
+
+    Returns
+    -------
+    resampled : nib.Nifti1Image
+        Resampled input `img`
+    """
+
+    if resolution not in DENSITIES['MNI152']:
+        raise ValueError(f'Invalid target resolution: {resolution}')
+    res = int(resolution[0])
+
+    if target is not None:
+        out = nimage.resample_to_img(img, target, interpolation=method)
+    else:
+        out = nimage.resample_img(img, np.eye(3) * res, interpolation=method)
+
+    return out
 
 
 def _check_hemi(data, hemi):

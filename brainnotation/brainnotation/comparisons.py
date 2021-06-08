@@ -5,17 +5,18 @@ Functions for comparing data
 
 from typing import Iterable
 
+import nibabel as nib
 import numpy as np
 from scipy.stats import rankdata
 
 from brainnotation import transforms
-from brainnotation.datasets import DENSITIES
+from brainnotation.datasets import ALIAS, DENSITIES
 from brainnotation.images import load_gifti
 
 
 _resampling_docs = dict(
     resample_in="""\
-{src, trg} : str or os.PathLike or nib.GiftiImage or tuple
+{src, trg} : str or os.PathLike or niimg_like or nib.GiftiImage or tuple
     Input data to be resampled to each other
 {src,trg}_space : str
     Template space of {`src`, `trg`} data\
@@ -24,7 +25,7 @@ hemi : {'L', 'R'}, optional
     represent. Default: None
 method : {'nearest', 'linear'}, optional
     Method for resampling. Specify 'nearest' if `data` are label images.
-    Default: 'linear'
+    Default: 'linear'\
 """,
     resample_out="""\
 src, trg : tuple-of-nib.GiftiImage
@@ -33,13 +34,31 @@ src, trg : tuple-of-nib.GiftiImage
 )
 
 
+def _load_data(data):
+    """ Small utility to load + stack `data` images (gifti / nifti)
+    """
+
+    out = ()
+    for img in data:
+        try:
+            out += (load_gifti(img).agg_data(),)
+        except (AttributeError, TypeError):
+            if isinstance(img, str):
+                img = nib.load(img)
+            out += (img.get_fdata(),)
+    return np.hstack(out)
+
+
 def imgcorr(src, trg, corrtype='pearson', ignore_zero=True):
     """
     Correlates images `src` and `trg`
 
+    If `src` and `trg` represent data from multiple hemispheres the hemispheres
+    are concatenated prior to correlation
+
     Parameters
     ----------
-    src, trg : str or os.PathLike or nib.GiftiImage
+    src, trg : str or os.PathLike or nib.GiftiImage or tuple
         Images to be correlated
     corrtype : {'pearson', 'spearman'}, optional
         Type of correlation to perform. Default: 'pearson'
@@ -57,16 +76,22 @@ def imgcorr(src, trg, corrtype='pearson', ignore_zero=True):
     if corrtype not in methods:
         raise ValueError(f'Invalid method: {corrtype}')
 
-    if isinstance(src, str) or not isinstance(trg, Iterable):
+    if isinstance(src, str) or not isinstance(src, Iterable):
         src = (src,)
     if isinstance(trg, str) or not isinstance(trg, Iterable):
         trg = (trg,)
 
-    srcdata = np.hstack([np.nan_to_num(load_gifti(s).agg_data()) for s in src])
-    trgdata = np.hstack([np.nan_to_num(load_gifti(t).agg_data()) for t in trg])
+    srcdata = _load_data(src)
+    trgdata = _load_data(trg)
+
     if ignore_zero:
-        mask = np.logical_and(np.isclose(srcdata, 0), np.isclose(trgdata, 0))
+        mask = np.logical_or(np.isclose(srcdata, 0), np.isclose(trgdata, 0))
         srcdata, trgdata = srcdata[~mask], trgdata[~mask]
+
+    # drop NaNs
+    mask = np.logical_or(np.isnan(srcdata), np.isnan(trgdata))
+    srcdata, trgdata = srcdata[~mask], trgdata[~mask]
+
     if corrtype == 'spearman':
         srcdata, trgdata = rankdata(srcdata), trgdata(rankdata)
 
@@ -79,8 +104,8 @@ def _estimate_density(data, hemi=None):
 
     Parameters
     ----------
-    data : str or os.PathLike or nib.GiftiImage or tuple
-        Input data
+    data : (2,) tuple of str or os.PathLike or nib.GiftiImage or tuple
+        Input data for (src, trg)
     hemi : {'L', 'R'}, optional
         If `data` is not a tuple this specifies the hemisphere the data are
         representing. Default: None
@@ -101,37 +126,35 @@ def _estimate_density(data, hemi=None):
         32492: '32k', 40692: '41k', 163842: '164k'
     }
 
-    data, hemi = zip(*transforms._check_hemi(data, hemi))
-    n_vert = [len(load_gifti(d).agg_data()) for d in data]
-    if not all(n == n_vert[0] for n in n_vert):
-        raise ValueError('Provided data have different resolutions across '
-                         'hemispheres?')
-    else:
-        n_vert = n_vert[0]
-    density = density_map.get(n_vert)
-    if density is None:
-        raise ValueError('Provided data resolution is non-standard. Number of '
-                         f'vertices estimated in data: {n_vert}')
+    densities = tuple()
+    for img in data:
+        img, hemi = zip(*transforms._check_hemi(img, hemi))
+        n_vert = [len(load_gifti(d).agg_data()) for d in img]
+        if not all(n == n_vert[0] for n in n_vert):
+            raise ValueError('Provided data have different resolutions across '
+                             'hemispheres?')
+        else:
+            n_vert = n_vert[0]
+        density = density_map.get(n_vert)
+        if density is None:
+            raise ValueError('Provided data resolution is non-standard. '
+                             'Number of vertices estimated in data: {n_vert}')
+        densities += (density,)
 
-    return density
+    return densities
 
 
 def downsample_only(src, trg, src_space, trg_space, hemi=None,
                     method='linear'):
-    densities = {'src': None, 'trg': None}
-    for data, key in zip((src, trg), densities):
-        densities[key] = _estimate_density(data, hemi)
-
-    src_den, trg_den = densities['src'], densities['trg']
+    src_den, trg_den = _estimate_density((src, trg), hemi)
     src_num, trg_num = int(src_den[:-1]), int(trg_den[:-1])
+    src_space, trg_space = src_space.lower(), trg_space.lower()
 
     if src_num >= trg_num:  # resample to `trg`
-        func = getattr(transforms,
-                       f'{src_space.lower()}_to_{trg_space.lower()}')
+        func = getattr(transforms, f'{src_space}_to_{trg_space}')
         src = func(src, src_den, trg_den, hemi=hemi, method=method)
     elif src_num < trg_num:  # resample to `src`
-        func = getattr(transforms,
-                       f'{trg_space.lower()}_to_{src_space.lower()}')
+        func = getattr(transforms, f'{trg_space}_to_{src_space}')
         trg = func(trg, trg_den, src_den, hemi=hemi, method=method)
 
     return src, trg
@@ -155,11 +178,7 @@ Returns
 
 def transform_to_src(src, trg, src_space, trg_space, hemi=None,
                      method='linear'):
-    densities = {'src': None, 'trg': None}
-    for data, key in zip((src, trg), densities):
-        densities[key] = _estimate_density(data, hemi)
-    src_den, trg_den = densities['src'], densities['trg']
-    _, hemi = zip(*transforms._check_hemi(trg, hemi))
+    src_den, trg_den = _estimate_density((src, trg), hemi)
 
     func = getattr(transforms, f'{trg_space.lower()}_to_{src_space.lower()}')
     trg = func(trg, trg_den, src_den, hemi=hemi, method=method)
@@ -182,11 +201,7 @@ Returns
 
 def transform_to_trg(src, trg, src_space, trg_space, hemi=None,
                      method='linear'):
-    densities = {'src': None, 'trg': None}
-    for data, key in zip((src, trg), densities):
-        densities[key] = _estimate_density(data, hemi)
-    src_den, trg_den = densities['src'], densities['trg']
-    _, hemi = zip(*transforms._check_hemi(src, hemi))
+    src_den, trg_den = _estimate_density((src, trg), hemi)
 
     func = getattr(transforms, f'{src_space.lower()}_to_{trg_space.lower()}')
     src = func(src, src_den, trg_den, hemi=hemi, method=method)
@@ -210,18 +225,13 @@ Returns
 def transform_to_alt(src, trg, src_space, trg_space, hemi=None,
                      method='linear', alt_space='fsaverage',
                      alt_density='41k'):
-    densities = {'src': None, 'trg': None}
-    for data, key in zip((src, trg), densities):
-        densities[key] = _estimate_density(data, hemi)
-    src_den, trg_den = densities['src'], densities['trg']
+    src_den, trg_den = _estimate_density((src, trg), hemi)
 
-    _, src_hemi = zip(*transforms._check_hemi(src, hemi))
     func = getattr(transforms, f'{src_space.lower()}_to_{alt_space.lower()}')
-    src = func(src, src_den, alt_density, hemi=src_hemi, method=method)
+    src = func(src, src_den, alt_density, hemi=hemi, method=method)
 
-    _, trg_hemi = zip(*transforms._check_hemi(trg, hemi))
     func = getattr(transforms, f'{trg_space.lower()}_to_{alt_space.lower()}')
-    trg = func(trg, trg_den, alt_density, hemi=trg_hemi, method=method)
+    trg = func(trg, trg_den, alt_density, hemi=hemi, method=method)
 
     return src, trg
 
@@ -237,6 +247,18 @@ Returns
 -------
 {resample_out}
 """.format(**_resampling_docs)
+
+
+def mni_transformation(src, trg, src_space, trg_space):
+    if src_space != 'MNI152':
+        raise ValueError('Cannot perform MNI transformation when src_space is '
+                         f'not "MNI152." Received: {src_space}.')
+    trg_den = trg
+    if trg_space != 'MNI152':
+        trg_den, = _estimate_density((trg_den,), None)
+    func = getattr(transforms, f'mni152_to_{trg_space.lower()}')
+    src = func(src, trg_den)
+    return src, trg
 
 
 def _check_altspec(spec):
@@ -268,38 +290,48 @@ def _check_altspec(spec):
         raise ValueError('Must provide valid alternative specification of '
                          f'format (space, density). Received: {spec}')
 
-    return spec
+    return (ALIAS.get(spec[0], spec[0]), spec[1])
 
 
 def correlate_images(src, trg, src_space, trg_space, hemi=None,
                      method='linear', resampling='downsample_only',
                      corrtype='pearson', ignore_zero=True,
                      alt_spec=None):
+
     resamplings = ('downsample_only', 'transform_to_src', 'transform_to_trg',
                    'transform_to_alt')
     if resampling not in resamplings:
         raise ValueError(f'Invalid method: {resampling}')
 
+    src_space = ALIAS.get(src_space, src_space)
+    trg_space = ALIAS.get(trg_space, trg_space)
+
     opts, err = {}, None
     if resampling == 'transform_to_alt':
         opts['alt_space'], opts['alt_density'] = _check_altspec(alt_spec)
-    elif resampling == 'transform_to_src' and src_space.lower() == 'mni152':
+    elif (resampling == 'transform_to_src' and src_space == 'MNI152'
+            and trg_space != 'MNI152'):
         err = ('Specified `src_space` cannot be "MNI152" when `resampling` is '
-               '`transform_to_src')
-    elif resampling == 'transform_to_trg' and trg_space.lower() == 'mni152':
+               '"transform_to_src"')
+    elif (resampling == 'transform_to_trg' and src_space != 'MNI152'
+            and trg_space == 'MNI152'):
         err = ('Specified `trg_space` cannot be "MNI152" when `resampling` is '
-               '`transform_to_trg`')
-    elif resampling == 'transform_to_alt' and opts['alt_space'] == 'mni152':
+               '"transform_to_trg"')
+    elif (resampling == 'transform_to_alt' and opts['alt_space'] == 'MNI152'
+            and (src_space != 'MNI152' or trg_space != 'MNI152')):
         err = ('Specified `alt_space` cannot be "MNI152" when `resampling` is '
-               '`transform_to_alt`')
+               '"transform_to_alt"')
     if err is not None:
         raise ValueError(err)
 
-    func = globals()[resampling]
-
-    # resample
-    src, trg = func(src, trg, src_space, trg_space, hemi=hemi,
-                    method=method, **opts)
+    if src_space == 'MNI152':
+        src, trg = mni_transformation(src, trg, src_space, trg_space)
+    elif trg_space == 'MNI152':
+        trg, src = mni_transformation(trg, src, trg_space, src_space)
+    else:
+        func = globals()[resampling]
+        src, trg = func(src, trg, src_space, trg_space, hemi=hemi,
+                        method=method, **opts)
     correlation = imgcorr(src, trg, corrtype=corrtype, ignore_zero=ignore_zero)
 
     return correlation
