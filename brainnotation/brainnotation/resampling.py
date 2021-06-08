@@ -3,12 +3,6 @@
 Functions for comparing data
 """
 
-from typing import Iterable
-
-import nibabel as nib
-import numpy as np
-from scipy.stats import rankdata
-
 from brainnotation import transforms
 from brainnotation.datasets import ALIAS, DENSITIES
 from brainnotation.images import load_gifti
@@ -34,70 +28,6 @@ src, trg : tuple-of-nib.GiftiImage
     Resampled images\
 """
 )
-
-
-def _load_data(data):
-    """ Small utility to load + stack `data` images (gifti / nifti)
-    """
-
-    out = ()
-    for img in data:
-        try:
-            out += (load_gifti(img).agg_data(),)
-        except (AttributeError, TypeError):
-            if isinstance(img, str):
-                img = nib.load(img)
-            out += (img.get_fdata(),)
-    return np.hstack(out)
-
-
-def imgcorr(src, trg, corrtype='pearson', ignore_zero=True):
-    """
-    Correlates images `src` and `trg`
-
-    If `src` and `trg` represent data from multiple hemispheres the hemispheres
-    are concatenated prior to correlation
-
-    Parameters
-    ----------
-    src, trg : str or os.PathLike or nib.GiftiImage or tuple
-        Images to be correlated
-    corrtype : {'pearson', 'spearman'}, optional
-        Type of correlation to perform. Default: 'pearson'
-    ignore_zero : bool, optional
-        Whether to perform correlations ignoring all zero values in `src` and
-        `trg` data. Default: True
-
-    Returns
-    -------
-    correlation : float
-         Correlation between `src` and `trg`
-    """
-
-    methods = ('pearson', 'spearman')
-    if corrtype not in methods:
-        raise ValueError(f'Invalid method: {corrtype}')
-
-    if isinstance(src, str) or not isinstance(src, Iterable):
-        src = (src,)
-    if isinstance(trg, str) or not isinstance(trg, Iterable):
-        trg = (trg,)
-
-    srcdata = _load_data(src)
-    trgdata = _load_data(trg)
-
-    if ignore_zero:
-        mask = np.logical_or(np.isclose(srcdata, 0), np.isclose(trgdata, 0))
-        srcdata, trgdata = srcdata[~mask], trgdata[~mask]
-
-    # drop NaNs
-    mask = np.logical_or(np.isnan(srcdata), np.isnan(trgdata))
-    srcdata, trgdata = srcdata[~mask], trgdata[~mask]
-
-    if corrtype == 'spearman':
-        srcdata, trgdata = rankdata(srcdata), trgdata(rankdata)
-
-    return np.corrcoef(srcdata, trgdata)[0, 1]
 
 
 def _estimate_density(data, hemi=None):
@@ -246,7 +176,7 @@ Parameters
 ----------
 {resample_in}
 {hemi}
-alt_space : {'fsaverage', 'fsLR', 'civet'}, optional
+alt_space : {{'fsaverage', 'fsLR', 'civet'}}, optional
     Alternative space to which `src` and `trg` should be transformed. Default:
     'fsaverage'
 alt_density : str, optional
@@ -316,9 +246,8 @@ def _check_altspec(spec):
     return (ALIAS.get(spec[0], spec[0]), spec[1])
 
 
-def correlate_images(src, trg, src_space, trg_space, method='linear',
-                     hemi=None, resampling='downsample_only',
-                     corrtype='pearson', ignore_zero=True, alt_spec=None):
+def resample_images(src, trg, src_space, trg_space, method='linear',
+                    hemi=None, resampling='downsample_only', alt_spec=None):
 
     resamplings = ('downsample_only', 'transform_to_src', 'transform_to_trg',
                    'transform_to_alt')
@@ -355,12 +284,11 @@ def correlate_images(src, trg, src_space, trg_space, method='linear',
         func = globals()[resampling]
         src, trg = func(src, trg, src_space, trg_space, hemi=hemi,
                         method=method, **opts)
-    correlation = imgcorr(src, trg, corrtype=corrtype, ignore_zero=ignore_zero)
 
-    return correlation
+    return tuple(load_gifti(s) for s in src), tuple(load_gifti(t) for t in trg)
 
 
-correlate_images.__doc__ = """\
+resample_images.__doc__ = """\
 Correlates images `src` and `trg`, resampling as needed
 
 Parameters
@@ -369,9 +297,9 @@ Parameters
 {hemi}
 resampling : str, optional
     Name of resampling function to resample `src` and `trg`. Must be one of:
-    {'downsample_only', 'transform_to_src', 'transform_to_trg',
-    'transform_to_alt'}. See Notes for more info. Default: 'downsample_only'
-corrtype : {'pearson', 'spearman'}, optional
+    {{'downsample_only', 'transform_to_src', 'transform_to_trg',
+    'transform_to_alt'}}. See Notes for more info. Default: 'downsample_only'
+corrtype : {{'pearson', 'spearman'}}, optional
     Type of correlation to perform. Default: 'pearson'
 ignore_zero : bool, optional
     Whether to perform correlations ignoring all zero values in `src` and
@@ -382,30 +310,27 @@ alt_spec : (2,) tuple-of-str
 
 Returns
 -------
-correlation : float
-    Correlation between `src` and `trg`. If multiple hemispheres are
-    provided then correlation is calculated between data concatenated across
-    hemispheres
+{resample_out}
 
 Notes
 -----
 The four available `resampling` strategies will control how `src` and/or `trg`
 are resampled prior to correlation. Options include:
 
-1. `resampling='downsample_only'`
+    1. `resampling='downsample_only'`
 
     Data from `src` and `trg` are resampled to the lower resolution of the two
     input datasets
 
-2. `resampling='transform_to_src'`
+    2. `resampling='transform_to_src'`
 
     Data from `trg` are always resampled to match `src` space and resolution
 
-3. `resampling='transform_to_trg'`
+    3. `resampling='transform_to_trg'`
 
     Data from `src` are always resampled to match `trg` space and resolution
 
-4. `resampling='transform_to_alt'`
+    4. `resampling='transform_to_alt'`
 
     Data from `trg` and `src` are resampled to the space and resolution
     specified by `alt_spec` (space, density)
