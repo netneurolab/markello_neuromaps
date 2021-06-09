@@ -180,7 +180,7 @@ def hungarian(data, atlas='fsaverage', density='10k', parcellation=None,
 
 
 hungarian.__doc__ = """\
-Generates null maps for parcellated `data` using the Hungarian method
+Generates null maps for parcellated `data` using the Hungarian method ([SN3]_)
 
 Method projects parcels to a spherical surface and uses arbitrary rotations
 with reassignments based on optimization via the Hungarian method to generate
@@ -441,7 +441,7 @@ def burt2020(data, atlas='fsaverage', density='10k', parcellation=None,
 
 
 burt2020.__doc__ = """\
-Generates null maps for `data` using method from [SN7]_
+Generates null maps for `data` using method from [SN7]_ and [SN8]_
 
 Method uses variograms to estimate spatial autocorrelation of `data` and
 generates surrogate maps with similar variogram properties
@@ -481,7 +481,8 @@ Generates null maps for `data` using method from [SN9]_
 
 Method uses a spatial decomposition of a distance-based weight matrix to
 estimate eigenvectors that are used to generate surrogate maps by imposing a
-similar spatial structure on randomized data
+similar spatial structure on randomized data. For a MATLAB implementation
+refer to [SN10]_ and [SN11]_
 
 Parameters
 ----------

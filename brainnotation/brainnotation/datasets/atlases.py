@@ -160,6 +160,17 @@ def fetch_atlas(atlas, density, url=None, data_dir=None, verbose=1):
 
 
 def fetch_all_atlases(data_dir=None, verbose=1):
+    """
+    Fetches (and caches) all available atlases
+
+    Parameters
+    ----------
+    data_dir : str, optional
+        Path to use as data directory. If not specified, will check for
+        environmental variable 'BRAINNOTATION_DATA'; if that is not set, will
+        use `~/brainnotation-data` instead. Default: None
+    verbose :
+    """
     atlases = {'regfusion': {}}
     for key, resolutions in DENSITIES.items():
         atlases[key] = {}
@@ -174,6 +185,28 @@ def fetch_all_atlases(data_dir=None, verbose=1):
 
 
 def get_atlas_dir(atlas, data_dir=None):
+    """
+    Returns filepath to specified `atlas`
+
+    Parameters
+    ----------
+    atlas : str
+        Atlas for which filepath should be returned
+    data_dir : str, optional
+        Path to use as data directory. If not specified, will check for
+        environmental variable 'BRAINNOTATION_DATA'; if that is not set, will
+        use `~/brainnotation-data` instead. Default: None
+
+    Returns
+    -------
+    atlas_dir : os.PathLike
+        Full filepath to `atlas` directory
+
+    Raises
+    ------
+    ValueError
+        If provided `atlas` is not valid
+    """
     try:
         atlas = _sanitize_atlas(atlas)
     except ValueError as err:

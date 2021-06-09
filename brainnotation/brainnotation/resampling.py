@@ -10,10 +10,10 @@ from brainnotation.images import load_gifti
 
 _resampling_docs = dict(
     resample_in="""\
-{src, trg} : str or os.PathLike or niimg_like or nib.GiftiImage or tuple
-    Input data to be resampled to each other
-{src,trg}_space : str
-    Template space of {`src`, `trg`} data\
+src, trg : str or os.PathLike or niimg_like or nib.GiftiImage or tuple
+    Input data to be resampled
+src_space, trg_space : str
+    Template space of input data
 method : {'nearest', 'linear'}, optional
     Method for resampling. Specify 'nearest' if `data` are label images.
     Default: 'linear'\
@@ -289,7 +289,7 @@ def resample_images(src, trg, src_space, trg_space, method='linear',
 
 
 resample_images.__doc__ = """\
-Correlates images `src` and `trg`, resampling as needed
+Resamples images `src` and `trg` to same space/density with `resampling` method
 
 Parameters
 ----------
@@ -297,16 +297,11 @@ Parameters
 {hemi}
 resampling : str, optional
     Name of resampling function to resample `src` and `trg`. Must be one of:
-    {{'downsample_only', 'transform_to_src', 'transform_to_trg',
-    'transform_to_alt'}}. See Notes for more info. Default: 'downsample_only'
-corrtype : {{'pearson', 'spearman'}}, optional
-    Type of correlation to perform. Default: 'pearson'
-ignore_zero : bool, optional
-    Whether to perform correlations ignoring all zero values in `src` and
-    `trg` data. Default: True
+    'downsample_only', 'transform_to_src', 'transform_to_trg',
+    'transform_to_alt'. See Notes for more info. Default: 'downsample_only'
 alt_spec : (2,) tuple-of-str
     Where entries are (space, density) of desired target space. Only used if
-    `resampling='transform_to_alt'. Default: None
+    `resampling='transform_to_alt'`. Default: None
 
 Returns
 -------
@@ -334,4 +329,5 @@ are resampled prior to correlation. Options include:
 
     Data from `trg` and `src` are resampled to the space and resolution
     specified by `alt_spec` (space, density)
+
 """.format(**_resampling_docs)

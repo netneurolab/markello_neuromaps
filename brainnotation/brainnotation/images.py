@@ -265,8 +265,8 @@ def vertex_areas(surface):
     Vertex area is calculated as the sum of 1/3 the area of each triangle in
     which the vertex participates
 
-    Parameter
-    ---------
+    Parameters
+    ----------
     surface : str or os.PathLike
         Path to (gifti) file defining surface for which areas should be
         computed
@@ -344,7 +344,7 @@ def _relabel(labels, minval=0, bgval=None):
     return labels
 
 
-def relabel_gifti(parcellation, background=PARCIGNORE, offset=None):
+def relabel_gifti(parcellation, background=None, offset=None):
     """
     Updates GIFTI images so label IDs are consecutive across hemispheres
 
@@ -353,24 +353,28 @@ def relabel_gifti(parcellation, background=PARCIGNORE, offset=None):
     parcellation : (2,) tuple-of-str
         Surface label files in GIFTI format (lh.label.gii, rh.label.gii)
     background : list-of-str, optional
-        If provided, a list of IDs in `atlas` that should be set to 0 (the
-        presumptive background value). Other IDs will be shifted so they are
-        consecutive (i.e., 0--N). Default: `PARCIGNORE`
+        If provided, a list of IDs in `parcellation` that should be set to 0
+        (the presumptive background value). Other IDs will be shifted so they
+        are consecutive (i.e., 0--N). If not specified will use labels in
+        `brainnotation.images.PARCIGNORE`. Default: None
     offset : int, optional
-        What the lowest value in `atlas[1]` should be not including background
-        value. If not specified it will be purely consecutive from `atlas[0]`.
-        Default: None
+        What the lowest value in `parcellation[1]` should be not including
+        background value. If not specified it will be purely consecutive from
+        `parcellation[0]`. Default: None
 
     Returns
     -------
     relabelled : (2,) tuple-of-nib.gifti.GiftiImage
-        Re-labelled `atlas` files
+        Re-labelled `parcellation` files
     """
 
     relabelled = tuple()
     minval = 0
     if not isinstance(parcellation, tuple):
         parcellation = (parcellation,)
+
+    if background is None:
+        background = PARCIGNORE.copy()
 
     for hemi in parcellation:
         # get necessary info from file
