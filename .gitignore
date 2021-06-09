@@ -5,3 +5,4 @@ figs/
 *.out
 *.simg
 figures/
+generated/
