@@ -11,11 +11,11 @@ import tempfile
 import nibabel as nib
 import numpy as np
 
+from brainnotation.civet import resample_surface_map
 from brainnotation.datasets import fetch_atlas
-from brainnotation.images import construct_shape_gii, obj_to_gifti
+from brainnotation.images import construct_shape_gii, obj_to_gifti, minc2nii
 from brainnotation.utils import tmpname, run, check_fs_subjid
 
-from .civet import resample_surface_map
 
 VOLTOSURF = 'wb_command -volume-to-surface-mapping {volume} {srcmid} ' \
             '{out} -ribbon-constrained {white} {pial} -interpolate TRILINEAR'
@@ -27,44 +27,6 @@ VOLRESAMP = 'wb_command -volume-resample {mni} {space} CUBIC {volume} ' \
             '-warp {warp} -fnirt {space}'
 GENMIDTHICK = 'wb_command -surface-average {mid} -surf {white} -surf {pial}'
 FSTOGII = 'mris_convert {fs} {gii}'
-
-
-def minc2nii(img, fn=None):
-    """
-    Converts MINC `img` to NIfTI format (and re-orients to RAS)
-
-    Parameters
-    ----------
-    img : str or os.PathLike
-        Path to MINC file to be converted
-    fn : str or os.PathLike, optional
-        Filepath to where converted NIfTI image should be stored. If not
-        supplied the converted image is not saved to disk and is returned.
-        Default: None
-
-    Returns
-    -------
-    out : nib.Nifti1Image or os.PathLike
-        Converted image (if `fn` is None) or path to saved file on disk
-    """
-
-    mnc = nib.load(img)
-    nifti = nib.Nifti1Image(np.asarray(mnc.dataobj), mnc.affine)
-
-    # re-orient nifti image RAS
-    orig_ornt = nib.io_orientation(nifti.affine)
-    targ_ornt = nib.orientations.axcodes2ornt('RAS')
-    transform = nib.orientations.ornt_transform(orig_ornt, targ_ornt)
-    nifti = nifti.as_reoriented(transform)
-
-    # save file (if desired)
-    if fn is not None:
-        fn = Path(fn).resolve()
-        if fn.name.endswith('.mnc'):
-            fn = fn.parent / fn.name.replace('.mnc', '.nii.gz')
-        nib.save(nifti, fn)
-        return fn
-    return nifti
 
 
 def make_xyz(template):
