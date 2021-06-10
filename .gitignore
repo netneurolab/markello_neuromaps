@@ -6,3 +6,5 @@ figs/
 *.simg
 figures/
 generated/
+auto_examples/
+modules/
