@@ -155,7 +155,7 @@ def _get_session(token=None):
         Session instance with authentication in header
     """
 
-    session = {}, requests.Session()
+    session = requests.Session()
     token = _get_token(token)
     if token is not None:
         session.headers['Authorization'] = 'Bearer {}'.format(token)
