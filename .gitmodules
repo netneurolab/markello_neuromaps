@@ -1,0 +1,3 @@
+[submodule "brainnotation"]
+	path = brainnotation
+	url = git@github.com:netneurolab/brainnotation
