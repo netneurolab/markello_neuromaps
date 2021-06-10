@@ -30,9 +30,11 @@ MSMROT = '{msmpath} --levels=2 --verbose --inmesh={sphere} --indata={sulc} ' \
 MSMSUL = '{msmpath} --verbose --inmesh={sphererot} --indata={sulc} ' \
          '--refmesh={refmesh} --refdata={refdata} --conf={sulconf} '\
          '--out={msmsulout}'
-MSMPATH = resource_filename('brainnotation', 'data/msm')
-MSMCONF_ROT = resource_filename('brainnotation', 'data/MSMPreRotationConf')
-MSMCONF_SUL = resource_filename('brainnotation', 'data/MSMSulcStrainFinalConf')
+MSMPATH = resource_filename('brainnotation_dev', 'data/msm')
+MSMCONF_ROT = resource_filename('brainnotation_dev',
+                                'data/MSMPreRotationConf')
+MSMCONF_SUL = resource_filename('brainnotation_dev',
+                                'data/MSMSulcStrainFinalConf')
 
 
 def read_civet_surf(fname):
