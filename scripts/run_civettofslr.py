@@ -13,7 +13,7 @@ import nibabel as nib
 import numpy as np
 
 from brainnotation import images
-from brainnotation.civet import register_subject, SPHEREFIX
+from brainnotation_dev.civet import register_subject, SPHEREFIX
 from brainnotation.utils import run
 
 DATADIR = Path('./data/raw/hcp').resolve()

@@ -24,4 +24,5 @@ dependencies:
     - pysurfer
     - nimare
     - git+https://github.com/netneurolab/netneurotools.git
+    - git+https://github.com/netneurolab/brainnotation.git
 

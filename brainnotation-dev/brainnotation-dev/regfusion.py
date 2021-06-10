@@ -11,10 +11,11 @@ import tempfile
 import nibabel as nib
 import numpy as np
 
-from brainnotation.civet import resample_surface_map
 from brainnotation.datasets import fetch_atlas
 from brainnotation.images import construct_shape_gii, obj_to_gifti
 from brainnotation.utils import tmpname, run, check_fs_subjid
+
+from .civet import resample_surface_map
 
 VOLTOSURF = 'wb_command -volume-to-surface-mapping {volume} {srcmid} ' \
             '{out} -ribbon-constrained {white} {pial} -interpolate TRILINEAR'
