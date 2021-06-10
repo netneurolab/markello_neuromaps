@@ -9,8 +9,10 @@ from pkg_resources import resource_filename
 
 import requests
 
+RESTRICTED = ["grh4d"]
 
-def _osfify_urls(data):
+
+def _osfify_urls(data, return_restricted=True):
     """
     Formats `data` object with OSF API URL
 
@@ -18,6 +20,9 @@ def _osfify_urls(data):
     ----------
     data : object
         If dict with a `url` key, will format OSF_API with relevant values
+    return_restricted : bool, optional
+        Whether to return restricted annotations. These will only be accesible
+        with a valid OSF token. Default: True
 
     Returns
     -------
@@ -35,47 +40,50 @@ def _osfify_urls(data):
             return
         # if the url isn't a string assume we're supposed to format it
         elif not isinstance(data['url'], str):
+            if data['url'][0] in RESTRICTED and not return_restricted:
+                return
             data['url'] = OSF_API.format(*data['url'])
 
     try:
         for key, value in data.items():
-            data[key] = _osfify_urls(value)
+            data[key] = _osfify_urls(value, return_restricted)
     except AttributeError:
         for n, value in enumerate(data):
-            data[n] = _osfify_urls(value)
+            data[n] = _osfify_urls(value, return_restricted)
         # drop the invalid entries
         data = [d for d in data if d is not None]
 
     return data
 
 
-def get_dataset_info(name):
+def get_dataset_info(name, return_restricted=True):
     """
-    Returns url and MD5 checksum for dataset `name`
+    Returns information for requested dataset `name`
 
     Parameters
     ----------
     name : str
         Name of dataset
-    dtype : {'atlas', 'annotation'}, optional
-        What datatype `name` refers to. Default: 'atlas'
+    return_restricted : bool, optional
+        Whether to return restricted annotations. These will only be accesible
+        with a valid OSF token. Default: True
 
     Returns
     -------
-    url : str
-        URL from which to download dataset
-    md5 : str
-        MD5 checksum for file downloade from `url`
+    dataset : dict or list-of-dict
+        Information on requested data
     """
 
     with open(resource_filename('brainnotation', 'data/osf.json')) as src:
-        osf_resources = _osfify_urls(json.load(src))
+        osf_resources = _osfify_urls(json.load(src), return_restricted)
 
     try:
-        return osf_resources[name]
+        resource = osf_resources[name]
     except KeyError:
         raise KeyError("Provided dataset '{}' is not valid. Must be one of: {}"
                        .format(name, sorted(osf_resources.keys())))
+
+    return resource
 
 
 def get_data_dir(data_dir=None):
@@ -105,6 +113,30 @@ def get_data_dir(data_dir=None):
     return data_dir
 
 
+def _get_token(token=None):
+    """
+    Returns `token` if provided or set as environmental variable
+
+    Parameters
+    ----------
+    token : str, optional
+        OSF personal access token for accessing restricted annotations. Will
+        also check the environmental variable 'BRAINNOTATION_OSF_TOKEN' if not
+        provided; if that is not set no token will be provided and restricted
+        annotations will be inaccessible. Default: None
+
+    Returns
+    -------
+    token : str
+        OSF token
+    """
+
+    if token is None:
+        token = os.environ.get('BRAINNOTATION_OSF_TOKEN', None)
+
+    return token
+
+
 def _get_session(token=None):
     """
     Returns requests.Session with `token` auth in header if supplied
@@ -123,11 +155,9 @@ def _get_session(token=None):
         Session instance with authentication in header
     """
 
-    headers, session = {}, requests.Session()
-    if token is None:
-        token = os.environ.get('BRAINNOTATION_OSF_TOKEN', None)
+    session = {}, requests.Session()
+    token = _get_token(token)
     if token is not None:
-        headers['Authorization'] = 'Bearer {}'.format(token)
-        session.headers.update(headers)
+        session.headers['Authorization'] = 'Bearer {}'.format(token)
 
     return session

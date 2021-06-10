@@ -97,7 +97,8 @@ def _match_annot(info, **kwargs):
 
 
 def available_annotations(source=None, desc=None, space=None, den=None,
-                          res=None, hemi=None, tags=None, format=None):
+                          res=None, hemi=None, tags=None, format=None,
+                          return_restricted=True):
     """
     Lists datasets available via :func:`~.fetch_annotation`
 
@@ -106,6 +107,9 @@ def available_annotations(source=None, desc=None, space=None, den=None,
     source, desc, space, den, res, hemi, tags, format : str or list-of-str
         Values on which to match annotations. If not specified annotations with
         any value for the relevant key will be matched. Default: None
+    return_restricted : bool, optional
+        Whether to return restricted annotations. These will only be accesible
+        with a valid OSF token. Default: True
 
     Returns
     -------
@@ -113,16 +117,23 @@ def available_annotations(source=None, desc=None, space=None, den=None,
         List of available annotations
     """
 
-    info = _match_annot(get_dataset_info('annotations'), source=source,
-                        desc=desc, space=space, den=den, res=res, hemi=hemi,
-                        tags=tags, format=format)
+    info = _match_annot(get_dataset_info('annotations', return_restricted),
+                        source=source, desc=desc, space=space, den=den,
+                        res=res, hemi=hemi, tags=tags, format=format)
 
     return list(_groupby_match([f['fname'] for f in info]).keys())
 
 
-def available_tags():
+def available_tags(return_restricted=True):
     """
     Returns available tags for querying annotations
+
+    Parameters
+    ----------
+    return_restricted : bool, optional
+        Whether to return restricted annotations. These will only be accesible
+        with a valid OSF token. Default: True
+
 
     Returns
     -------
@@ -131,7 +142,7 @@ def available_tags():
     """
 
     tags = set()
-    for dset in get_dataset_info('annotations'):
+    for dset in get_dataset_info('annotations', return_restricted):
         if dset['tags'] is not None:
             tags.update(dset['tags'])
     return sorted(tags)
