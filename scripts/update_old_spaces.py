@@ -16,8 +16,8 @@ from pathlib import Path
 
 import nibabel as nib
 
-from brainnotation_dev import caret
 from brainnotation import images
+from brainnotation_dev import caret
 
 ATLASDIR = Path('./data/raw/atlases').resolve()
 DATADIR = Path('./data/raw/brain_maps').resolve()

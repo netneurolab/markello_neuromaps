@@ -11,7 +11,7 @@ from joblib import Parallel, delayed
 import numpy as np
 
 from brainnotation_dev.regfusion import (fs_regfusion, hcp_regfusion,
-                                           civet_regfusion, get_files)
+                                         civet_regfusion, get_files)
 
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()
