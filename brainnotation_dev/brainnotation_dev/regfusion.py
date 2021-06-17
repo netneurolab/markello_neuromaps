@@ -13,7 +13,8 @@ import numpy as np
 
 from brainnotation.civet import resample_surface_map
 from brainnotation.datasets import fetch_atlas
-from brainnotation.images import construct_shape_gii, obj_to_gifti, minc2nii
+from brainnotation.images import (construct_shape_gii, obj_to_gifti,
+                                  minc_to_nifti)
 from brainnotation.utils import tmpname, run, check_fs_subjid
 
 
@@ -323,7 +324,7 @@ def civet_regfusion(subdir, res='41k', verbose=False):
 
     # run the actual commands
     generated = defaultdict(list)
-    nii = minc2nii(mnc, mnc)
+    nii = minc_to_nifti(mnc, mnc)
     for img, name in zip(make_xyz(nii), ('x', 'y', 'z')):
         template = tmpname(suffix='.nii.gz', directory=tempdir)
         nib.save(img, template)
