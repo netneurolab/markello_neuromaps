@@ -5,6 +5,7 @@ Contains code for generating registration-fusion mappings
 
 from collections import defaultdict
 from pathlib import Path
+from nibabel.filebasedimages import ImageFileError
 from pkg_resources import resource_filename
 import tempfile
 
@@ -20,12 +21,18 @@ from brainnotation.utils import tmpname, run, check_fs_subjid
 
 VOLTOSURF = 'wb_command -volume-to-surface-mapping {volume} {srcmid} ' \
             '{out} -ribbon-constrained {white} {pial} -interpolate TRILINEAR'
-SURFTOSURF = 'wb_command -metric-resample {out} {src} {trg} ADAP_BARY_AREA ' \
-             '{resamp} -area-surfs {srcmid} {trgmid} -current-roi {natmask}'
+SURFTOVOL = 'wb_command -metric-to-volume-mapping {out} {trgmid} {t1w} ' \
+            '{volume} -ribbon-constrained {white} {pial} -greedy'
+NATTOTEMP = 'wb_command -metric-resample {out} {src} {trg} ADAP_BARY_AREA ' \
+            '{resamp} -area-surfs {srcmid} {trgmid} -current-roi {natmask}'
+TEMPTONAT = 'wb_command -metric-resample {resamp} {src} {trg} ADAP_BARY_AREA' \
+            ' {out} -area-surfs {srcmid} {trgmid} -current-roi {fsmask}'
 NATMASK = 'wb_command -metric-mask {out} {natmask} {out}'
 FSMASK = 'wb_command -metric-mask {resamp} {fsmask} {resamp}'
-VOLRESAMP = 'wb_command -volume-resample {mni} {space} CUBIC {volume} ' \
-            '-warp {warp} -fnirt {space}'
+MNITOT1W = 'wb_command -volume-resample {mni} {space} CUBIC {volume} ' \
+           '-warp {warp} -fnirt {space}'
+T1WTOMNI = 'wb_command -volume-resample {volume} {space} ENCLOSING_VOXEL ' \
+           '{mni} -warp {warp} -fnirt {space}'
 GENMIDTHICK = 'wb_command -surface-average {mid} -surf {white} -surf {pial}'
 FSTOGII = 'mris_convert {fs} {gii}'
 
@@ -49,8 +56,31 @@ def make_xyz(template):
     xyz = nib.affines.apply_affine(img.affine, np.stack(ijk, axis=-1))
     x, y, z = [
         img.__class__(data.squeeze().transpose(1, 0, 2), img.affine)
-        for data in np.split(xyz.astype('int32'), 3, axis=-1)
+        for data in np.split(xyz, 3, axis=-1)
     ]
+    return x, y, z
+
+
+def make_surf_xyz(template):
+    """
+    Makes x/y/z index images in space of surface `template`
+
+    Parameters
+    ----------
+    template : str
+        Filepath to surface template
+
+    Returns
+    -------
+    x, y, z : nib.GiftImage
+        Index images in space of template
+    """
+
+    try:
+        xyz = nib.load(template).agg_data()
+    except ImageFileError:
+        xyz = nib.freesurfer.read_geometry(template)[0]
+    x, y, z = [construct_shape_gii(data) for data in np.split(xyz, 3, axis=-1)]
     return x, y, z
 
 
@@ -78,7 +108,7 @@ def get_files(subject, out_dir=None, profile='hcp', verbose=False):
     import boto3
     from botocore.exceptions import ClientError
 
-    fn = resource_filename('brainnotation', 'data/hcpfiles.txt')
+    fn = resource_filename('brainnotation_dev', 'data/hcpfiles.txt')
     with open(fn) as src:
         fnames = [fn.strip().format(sub=subject) for fn in src.readlines()]
 
@@ -136,6 +166,7 @@ def hcp_regfusion(subdir, res='32k', verbose=True):
     res = f'{res}_fs_LR'
     subdir = Path(subdir).resolve()
     subid = subdir.name
+    t1wdir = subdir / 'T1w'
     subdir = subdir / 'MNINonLinear'
     if not subdir.exists():
         raise ValueError('Provided subdir does not have expected structure')
@@ -147,10 +178,17 @@ def hcp_regfusion(subdir, res='32k', verbose=True):
     for img, name in zip(make_xyz(subdir / 'T1w.nii.gz'), ('x', 'y', 'z')):
         template = tmpname(suffix='.nii.gz')
         nib.save(img, template)
+        # transform index images from MNI to native space
+        volume = tmpname(suffix=f'.{name}.nat.nii.gz')
+        run(MNITOT1W.format(mni=template,
+                            space=t1wdir / 'T1w_acpc_dc.nii.gz',
+                            volume=volume,
+                            warp=subdir / 'xfms' / 'standard2acpc_dc.nii.gz'))
+        template.unlink()
         for hemi in ('L', 'R'):
             prefix = f'{subid}.{hemi}'
             params = dict(
-                volume=template,
+                volume=volume,
                 white=natdir / f'{prefix}.white.native.surf.gii',
                 pial=natdir / f'{prefix}.pial.native.surf.gii',
                 src=natdir / f'{prefix}.sphere.MSMAll.native.surf.gii',
@@ -167,11 +205,11 @@ def hcp_regfusion(subdir, res='32k', verbose=True):
             if verbose:
                 print(f'Generating {name}.{hemi} index image: '
                       f'{params["resamp"]}')
-            for cmd in (VOLTOSURF, NATMASK, SURFTOSURF, FSMASK):
+            for cmd in (VOLTOSURF, NATMASK, NATTOTEMP, FSMASK):
                 run(cmd.format(**params))
             generated[name].append(params['resamp'])
             params['out'].unlink()
-        template.unlink()
+        volume.unlink()
 
     return generated
 
@@ -218,10 +256,10 @@ def fs_regfusion(subdir, res='fsaverage6', verbose=False):
         template = tmpname(suffix='.nii.gz')
         nib.save(img, template)
         volume = tmpname(suffix=f'.{name}.nat.nii.gz')
-        run(VOLRESAMP.format(mni=template,
-                             space=t1wdir / 'T1w_acpc_dc.nii.gz',
-                             volume=volume,
-                             warp=mnidir / 'xfms' / 'standard2acpc_dc.nii.gz'))
+        run(MNITOT1W.format(mni=template,
+                            space=t1wdir / 'T1w_acpc_dc.nii.gz',
+                            volume=volume,
+                            warp=mnidir / 'xfms' / 'standard2acpc_dc.nii.gz'))
         template.unlink()
         for hemi in ('lh', 'rh'):
             params = dict(
@@ -275,7 +313,7 @@ def fs_regfusion(subdir, res='fsaverage6', verbose=False):
             if verbose:
                 print(f'Generating {name}.{hemi} index image: '
                       f'{params["resamp"]}')
-            for cmd in (VOLTOSURF, NATMASK, SURFTOSURF, FSMASK):
+            for cmd in (VOLTOSURF, NATMASK, NATTOTEMP, FSMASK):
                 run(cmd.format(**params))
             generated[name].append(params['resamp'])
             for key in ('out', 'fswhite', 'fspial', 'src', 'trg',

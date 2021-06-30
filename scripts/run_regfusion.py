@@ -23,11 +23,12 @@ REGFUNCS = dict(
     civet=civet_regfusion,
 )
 RESOLUTIONS = dict(
-    freesurfer=['fsaverage', 'fsaverage4', 'fsaverage5', 'fsaverage6'],
+    freesurfer=[f'fsaverage{n}' for n in ('', '3', '4', '5', '6')],
     hcp=['32k', '164k'],
     civet=['41k']
 )
 MAPPING = dict(
+    fsaverage3='1k',
     fsaverage4='3k',
     fsaverage5='10k',
     fsaverage6='41k',
