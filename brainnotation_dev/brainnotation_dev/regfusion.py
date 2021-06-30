@@ -77,7 +77,7 @@ def make_surf_xyz(template):
     """
 
     try:
-        xyz = nib.load(template).agg_data()
+        xyz = nib.load(template).agg_data('NIFTI_INTENT_POINTSET')
     except ImageFileError:
         xyz = nib.freesurfer.read_geometry(template)[0]
     x, y, z = [construct_shape_gii(data) for data in np.split(xyz, 3, axis=-1)]
