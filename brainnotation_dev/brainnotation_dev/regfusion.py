@@ -606,9 +606,7 @@ def fs_surf_regfusion(subdir, res='fsaverage6', verbose=False):
                 gii = tmpname(prefix=f'{hemi}.',
                               suffix=f'.{name}.{key}.label.gii')
                 nib.save(nib.GiftiImage(darrays=[
-                    nib.gifti.GiftiDataArray(mask,
-                                             intent='NIFTI_INTENT_LABEL',
-                                             datatype='NIFTI_TYPE_INT32')
+                    nib.gifti.GiftiDataArray(mask, datatype='NIFTI_TYPE_INT32')
                 ]), gii)
                 params[key] = gii
 
@@ -624,7 +622,7 @@ def fs_surf_regfusion(subdir, res='fsaverage6', verbose=False):
     return generated
 
 
-def civet_surf_regfusion(subdir, res='41k', verbose=False):
+def civet_surf_regfusion(subdir, res='41k', verbose=True):
     """
     Runs registration fusion pipeline on HCP subject `subdir`
 
@@ -637,7 +635,7 @@ def civet_surf_regfusion(subdir, res='41k', verbose=False):
     res : {'41k'}, optional
         Resolution from which to project the data
     verbose : bool, optional
-        Whether to print status messages. Default: False
+        Whether to print status messages. Default: True
 
     Returns
     -------
@@ -661,7 +659,7 @@ def civet_surf_regfusion(subdir, res='41k', verbose=False):
     medial = fetch_atlas('civet', '41k')['medial']
 
     # inverse surface registrations
-    surfmap = _civet_surf_reg(subdir)
+    surfmap = _civet_surf_reg(subdir, verbose=False)
 
     # run the actual commands
     generated = defaultdict(list)
@@ -720,7 +718,7 @@ def civet_surf_regfusion(subdir, res='41k', verbose=False):
     return generated
 
 
-def _civet_surf_reg(subdir):
+def _civet_surf_reg(subdir, verbose=True):
     """
     Runs "inverse" CIVET surface registration (mapping model -> native)
 
@@ -786,7 +784,8 @@ def _civet_surf_reg(subdir):
         for log in cli.logs(stream=True):
             curr_log = log.decode()
             ses_logs += curr_log
-            print(curr_log, end='')
+            if verbose:
+                print(curr_log, end='')
         log_file = (subdir / 'logs'
                     / f'{subid}.surface_registration_inv_{hemi}.log')
         with log_file.open(mode='w', encoding='utf-8') as dest:
