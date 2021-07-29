@@ -360,7 +360,7 @@ def civet_regfusion(subdir, res='41k', verbose=False):
     tempdir.mkdir(exist_ok=True, parents=True)
 
     # civet medial wall
-    civet_medial = fetch_atlas('civet', '41k')['medial']
+    civet_medial = fetch_atlas('civet', res)['medial']
 
     # run the actual commands
     generated = defaultdict(list)
@@ -656,7 +656,7 @@ def civet_surf_regfusion(subdir, res='41k', verbose=True):
     tempdir.mkdir(exist_ok=True, parents=True)
 
     # civet medial wall
-    medial = fetch_atlas('civet', '41k')['medial']
+    medial = fetch_atlas('civet', res)['medial']
 
     # inverse surface registrations
     surfmap = _civet_surf_reg(subdir, verbose=False)
