@@ -10,7 +10,7 @@ import time
 from joblib import Parallel, delayed
 import numpy as np
 
-from brainnotation_dev.regfusion import (fs_regfusion, fs_surf_regfusion,
+from neuromaps_dev.regfusion import (fs_regfusion, fs_surf_regfusion,
                                          hcp_regfusion, hcp_surf_regfusion,
                                          civet_regfusion, civet_surf_regfusion,
                                          get_files)

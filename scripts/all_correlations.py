@@ -7,8 +7,8 @@ import re
 import pandas as pd
 import numpy as np
 
-from brainnotation import datasets, images, nulls, resampling, stats
-from brainnotation.datasets.annotations import MATCH
+from neuromaps import datasets, images, nulls, resampling, stats
+from neuromaps.datasets.annotations import MATCH
 
 FIGDIR = Path('./figures/transformed')
 OUTDIR = Path('./data/derivatives/correlations')

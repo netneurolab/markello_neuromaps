@@ -12,11 +12,11 @@ import tempfile
 import nibabel as nib
 import numpy as np
 
-from brainnotation.civet import resample_surface_map
-from brainnotation.datasets import fetch_atlas
-from brainnotation.images import (construct_shape_gii, obj_to_gifti,
+from neuromaps.civet import resample_surface_map
+from neuromaps.datasets import fetch_atlas
+from neuromaps.images import (construct_shape_gii, obj_to_gifti,
                                   minc_to_nifti)
-from brainnotation.utils import tmpname, run, check_fs_subjid
+from neuromaps.utils import tmpname, run, check_fs_subjid
 
 
 VOLTOSURF = 'wb_command -volume-to-surface-mapping {volume} {srcmid} ' \
@@ -108,7 +108,7 @@ def get_files(subject, out_dir=None, profile='hcp', verbose=False):
     import boto3
     from botocore.exceptions import ClientError
 
-    fn = resource_filename('brainnotation_dev', 'data/hcpfiles.txt')
+    fn = resource_filename('neuromaps_dev', 'data/hcpfiles.txt')
     with open(fn) as src:
         fnames = [fn.strip().format(sub=subject) for fn in src.readlines()]
 
@@ -751,7 +751,7 @@ def _civet_surf_reg(subdir, verbose=True):
         return tuple(expected)
 
     # get CIVET surface models
-    atldir = resource_filename('brainnotation_dev', 'data/civet')
+    atldir = resource_filename('neuromaps_dev', 'data/civet')
 
     # get docker client and pull civet image
     client = docker.from_env()

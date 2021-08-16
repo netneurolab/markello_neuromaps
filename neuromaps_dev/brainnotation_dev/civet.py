@@ -10,9 +10,9 @@ import tempfile
 
 import numpy as np
 
-from brainnotation.datasets import fetch_atlas
-from brainnotation.images import (fix_coordsys, obj_to_gifti, fsmorph_to_gifti)
-from brainnotation.utils import run
+from neuromaps.datasets import fetch_atlas
+from neuromaps.images import (fix_coordsys, obj_to_gifti, fsmorph_to_gifti)
+from neuromaps.utils import run
 
 HEMI = dict(left='L', lh='L', L='L', right='R', rh='R', R='R')
 SMOOTH = 'mris_smooth -n 3 -nw {white} {smoothwm}'
@@ -28,10 +28,10 @@ MSMROT = '{msmpath} --levels=2 --verbose --inmesh={sphere} --indata={sulc} ' \
 MSMSUL = '{msmpath} --verbose --inmesh={sphererot} --indata={sulc} ' \
          '--refmesh={refmesh} --refdata={refdata} --conf={sulconf} '\
          '--out={msmsulout}'
-MSMPATH = resource_filename('brainnotation_dev', 'data/msm')
-MSMCONF_ROT = resource_filename('brainnotation_dev',
+MSMPATH = resource_filename('neuromaps_dev', 'data/msm')
+MSMCONF_ROT = resource_filename('neuromaps_dev',
                                 'data/MSMPreRotationConf')
-MSMCONF_SUL = resource_filename('brainnotation_dev',
+MSMCONF_SUL = resource_filename('neuromaps_dev',
                                 'data/MSMSulcStrainFinalConf')
 
 

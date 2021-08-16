@@ -10,8 +10,8 @@ from joblib import Parallel, delayed
 import nibabel as nib
 import numpy as np
 
-from brainnotation.images import construct_shape_gii, vertex_areas
-from brainnotation.utils import tmpname, run
+from neuromaps.images import construct_shape_gii, vertex_areas
+from neuromaps.utils import tmpname, run
 
 ATLASDIR = Path('./data/raw/atlases/fsLR').resolve()
 DATADIR = Path('./data/raw/hcp').resolve()

@@ -12,10 +12,10 @@ from joblib import Parallel, delayed
 import nibabel as nib
 import numpy as np
 
-from brainnotation import images
-from brainnotation.utils import run
+from neuromaps import images
+from neuromaps.utils import run
 
-from brainnotation_dev.civet import register_subject, SPHEREFIX
+from neuromaps_dev.civet import register_subject, SPHEREFIX
 
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()

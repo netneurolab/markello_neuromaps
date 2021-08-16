@@ -10,9 +10,9 @@ import pandas as pd
 from scipy.spatial.distance import squareform
 import seaborn as sns  # noqa
 
-from brainnotation.datasets import fetch_atlas, fetch_annotation
-from brainnotation import images, transforms
-import brainnotation.plotting # noqa
+from neuromaps.datasets import fetch_atlas, fetch_annotation
+from neuromaps import images, transforms
+import neuromaps.plotting # noqa
 from surfplot import Plot
 
 plt.rcParams['svg.fonttype'] = 'none'

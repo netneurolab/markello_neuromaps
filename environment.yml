@@ -1,4 +1,4 @@
-name: brainnotation_dev
+name: neuromaps_dev
 channels:
   - defaults
   - conda-forge
@@ -24,5 +24,5 @@ dependencies:
     - pysurfer
     - nimare
     - git+https://github.com/netneurolab/netneurotools.git
-    - -e brainnotation
-    - -e brainnotation_dev
+    - -e neuromaps
+    - -e neuromaps_dev

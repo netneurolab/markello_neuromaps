@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns  # noqa
 
-from brainnotation import datasets, plotting, resampling, stats, transforms
-from brainnotation.datasets.annotations import MATCH
+from neuromaps import datasets, plotting, resampling, stats, transforms
+from neuromaps.datasets.annotations import MATCH
 
 plt.rcParams['svg.fonttype'] = 'none'
 plt.rcParams['font.sans-serif'] = ['Myriad Pro']
