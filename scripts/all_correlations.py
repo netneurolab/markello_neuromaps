@@ -114,7 +114,7 @@ def correlate_images(annotations, alt_spec, nullmaps):
                                           n_perm=1000, seed=1234, spins=spins)
 
         # correlate images
-        corr, pval = stats.correlate_images(im1, im2, nulls=resampled)
+        corr, pval = stats.compare_images(im1, im2, nulls=resampled)
         df.append([annot1, annot2, corr, pval])
         print(df[-1])
 

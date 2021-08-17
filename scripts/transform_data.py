@@ -93,7 +93,7 @@ def correlate_images(images, resamp):
         # resample and correlate images
         im1, im2 = resampling.resample_images(im1, im2, src_space, trg_space,
                                               hemi=hemi, resampling=resamp)
-        corrs[n] = stats.correlate_images(im1, im2)
+        corrs[n] = stats.compare_images(im1, im2)
         n += 1
 
     return corrs
