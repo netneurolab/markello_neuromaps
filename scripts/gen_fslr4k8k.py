@@ -52,7 +52,7 @@ def main():
         )
         for data, hemi in zip(zip(*areas), ('L', 'R')):
             fn = f'tpl-fsLR_den-{res}_hemi-{hemi}_desc-vaavg_midthickness.' \
-                  'shape.gii'
+                 'shape.gii'
             nib.save(construct_shape_gii(np.mean(data, axis=0)), ATLASDIR / fn)
 
 

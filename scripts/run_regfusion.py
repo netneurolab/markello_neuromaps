@@ -11,9 +11,9 @@ from joblib import Parallel, delayed
 import numpy as np
 
 from neuromaps_dev.regfusion import (fs_regfusion, fs_surf_regfusion,
-                                         hcp_regfusion, hcp_surf_regfusion,
-                                         civet_regfusion, civet_surf_regfusion,
-                                         get_files)
+                                     hcp_regfusion, hcp_surf_regfusion,
+                                     civet_regfusion, civet_surf_regfusion,
+                                     get_files)
 
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()

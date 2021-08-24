@@ -15,8 +15,6 @@ OUTDIR = Path('./data/derivatives/correlations')
 HEMI = re.compile('hemi-(L|R)')
 ANNOTATIONS = [
     ('abagen', 'genepc1', 'fsaverage', '10k'),
-    ('bigbrain', 'infragranular', 'civet', '164k'),
-    ('bigbrain', 'supragranular', 'civet', '164k'),
     ('hcps1200', 'megalpha', 'fsLR', '4k'),
     ('hcps1200', 'megbeta', 'fsLR', '4k'),
     ('hcps1200', 'megdelta', 'fsLR', '4k'),
@@ -33,7 +31,6 @@ ANNOTATIONS = [
     ('raichle', 'cbf', 'fsLR', '164k'),
     ('raichle', 'cbv', 'fsLR', '164k'),
     ('raichle', 'cmr02', 'fsLR', '164k'),
-    ('raichle', 'cmro2', 'fsLR', '164k'),
     ('raichle', 'cmruglu', 'fsLR', '164k'),
     ('reardon2018', 'scalinghcp', 'civet', '41k'),
     ('reardon2018', 'scalingnih', 'civet', '41k'),
