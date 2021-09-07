@@ -14,8 +14,7 @@ import numpy as np
 
 from neuromaps.civet import resample_surface_map
 from neuromaps.datasets import fetch_atlas
-from neuromaps.images import (construct_shape_gii, obj_to_gifti,
-                                  minc_to_nifti)
+from neuromaps.images import (construct_shape_gii, obj_to_gifti, minc_to_nifti)
 from neuromaps.utils import tmpname, run, check_fs_subjid
 
 
@@ -667,7 +666,7 @@ def civet_surf_regfusion(subdir, res='41k', verbose=True):
     nib.save(minc_to_nifti(mnc), nii)
     for hemi, med, surfm in zip(('left', 'right'), medial, surfmap):
         sphere = (subdir / 'gifti'
-                  / f'{subid}_sphere_surface_{hemi}_81920.surf.gii')
+                  / f'{subid}_sphere_surface_rsl_{hemi}_81920.surf.gii')
         for img, name in zip(make_surf_xyz(sphere), ('x', 'y', 'z')):
             template = tmpname(suffix='.shape.gii', directory=tempdir)
             nib.save(img, template)
@@ -711,8 +710,6 @@ def civet_surf_regfusion(subdir, res='41k', verbose=True):
             for key in ('white', 'pial', 'srcmid', 'trgmid', 'out', 'resamp'):
                 params[key].unlink()
 
-        template.unlink()
-
     nii.unlink()
 
     return generated
@@ -751,11 +748,11 @@ def _civet_surf_reg(subdir, verbose=True):
         return tuple(expected)
 
     # get CIVET surface models
-    atldir = resource_filename('neuromaps_dev', 'data/civet')
+    atldir = resource_filename('nmdev', 'data/civet')
 
     # get docker client and pull civet image
     client = docker.from_env()
-    img = client.images.pull('mcin/civet')
+    img = client.images.pull('mcin/civet', tag='latest')
 
     # run heudiconv over all potential sessions
     generated = tuple()
@@ -775,7 +772,7 @@ def _civet_surf_reg(subdir, verbose=True):
                 f'/atlas/{template}',
                 f'/data/{surfmap}'
             ]),
-            detach=True,
+            detach=True, remove=True,
             volumes={str(subdir): {'bind': '/data', 'mode': 'rw'},
                      str(atldir): {'bind': '/atlas', 'mode': 'ro'}}
         )

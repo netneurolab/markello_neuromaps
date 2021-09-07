@@ -25,4 +25,4 @@ dependencies:
     - nimare
     - git+https://github.com/netneurolab/netneurotools.git
     - -e neuromaps
-    - -e neuromaps_dev
+    - -e neuromaps-dev

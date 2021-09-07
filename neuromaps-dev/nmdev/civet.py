@@ -28,11 +28,9 @@ MSMROT = '{msmpath} --levels=2 --verbose --inmesh={sphere} --indata={sulc} ' \
 MSMSUL = '{msmpath} --verbose --inmesh={sphererot} --indata={sulc} ' \
          '--refmesh={refmesh} --refdata={refdata} --conf={sulconf} '\
          '--out={msmsulout}'
-MSMPATH = resource_filename('neuromaps_dev', 'data/msm')
-MSMCONF_ROT = resource_filename('neuromaps_dev',
-                                'data/MSMPreRotationConf')
-MSMCONF_SUL = resource_filename('neuromaps_dev',
-                                'data/MSMSulcStrainFinalConf')
+MSMPATH = resource_filename('nmdev', 'data/msm')
+MSMCONF_ROT = resource_filename('nmdev', 'data/MSMPreRotationConf')
+MSMCONF_SUL = resource_filename('nmdev', 'data/MSMSulcStrainFinalConf')
 
 
 def extract_rotation(affine):

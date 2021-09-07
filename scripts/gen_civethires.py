@@ -14,7 +14,7 @@ import numpy as np
 from neuromaps import images
 from neuromaps.utils import run
 
-from neuromaps_dev.civet import SPHEREFIX
+from nmdev.civet import SPHEREFIX
 
 DATADIR = Path('./data/raw/hcp').resolve()
 CIVDIR = Path('./data/raw/civet').resolve()
