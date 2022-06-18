@@ -1,6 +1,3 @@
 [submodule "brainnotation"]
 	path = neuromaps
 	url = git@github.com:rmarkello/neuromaps
-[submodule "neuromaps-web"]
-	path = neuromaps-web
-	url = git@github.com:netneurolab/neuromaps-web
